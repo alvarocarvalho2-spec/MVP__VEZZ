@@ -5,6 +5,98 @@ import { APP } from "../config.js";
 import { bot } from "./bot-sprite.js";
 import { addressLine, compressImageFile, el, escapeHtml, formatDateTime, formatMinutes, initials, maskCEP, maskCNPJ, maskCPF, maskPhone, statusTone, ticketCode } from "./utils.js";
 
+// Reconcile live views in place. Keys follow records rather than their position.
+export function updateLiveView(root, html) {
+  if (!root.isConnected) return;
+  if (!root.childNodes.length) { root.innerHTML = html; return; }
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const key = node => node.nodeType === 1 ? node.id || node.getAttribute("data-key") || ["data-start", "data-finish", "data-cancel", "data-reschedule", "data-next", "data-time"].map(a => node.hasAttribute(a) ? `${a}:${node.getAttribute(a)}` : "").find(Boolean) : null;
+  const compatible = (a, b) => a.nodeType === b.nodeType && a.nodeName === b.nodeName && key(a) === key(b);
+  const patch = (old, fresh) => {
+    if (old.nodeType === 3) {
+      if (old.data !== fresh.data) {
+        old.data = fresh.data;
+        if (old.parentElement?.matches(".kpi b, .pos-num, .badge, .ticket .meta b")) {
+          if (!matchMedia("(prefers-reduced-motion: reduce)").matches) old.parentElement.animate?.([{ opacity: 0.4, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 300 });
+        }
+      }
+      return;
+    }
+    if (old.nodeType !== 1) return;
+    if (old.isEqualNode(fresh)) return;
+    const retained = ["reveal", "in", "motion-ready", "motion-paused", "scrolled", "is-active"].filter(c => old.classList.contains(c));
+    const delay = old.style.getPropertyValue("--d");
+    for (const attr of [...old.attributes]) if (!fresh.hasAttribute(attr.name) && !["tabindex", "aria-current"].includes(attr.name)) old.removeAttribute(attr.name);
+    for (const attr of fresh.attributes) if (old.getAttribute(attr.name) !== attr.value) old.setAttribute(attr.name, attr.value);
+    if (retained.length) old.classList.add(...retained);
+    if (delay) old.style.setProperty("--d", delay);
+    children(old, fresh);
+  };
+  const children = (old, fresh) => {
+    let cursor = old.firstChild;
+    const keyed = new Map([...old.childNodes].filter(n => key(n)).map(n => [key(n), n]));
+    for (const next of [...fresh.childNodes]) {
+      let current = key(next) ? keyed.get(key(next)) : cursor;
+      if (current && !compatible(current, next)) current = null;
+      if (!current) {
+        current = next.cloneNode(true);
+        old.insertBefore(current, cursor);
+        if (current.nodeType === 1 && current.matches(".row-item, tbody > tr") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          current.animate?.([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "ease-out" });
+        }
+      } else {
+        if (current !== cursor) {
+          const before = current.nodeType === 1 ? current.getBoundingClientRect().top : 0;
+          if (old.moveBefore) old.moveBefore(current, cursor);
+          else old.insertBefore(current, cursor);
+          if (current.nodeType === 1 && before && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            const delta = before - current.getBoundingClientRect().top;
+            if (delta) current.animate?.([{ transform: `translateY(${delta}px)` }, { transform: "none" }], { duration: 320, easing: "ease-out" });
+          }
+        }
+        patch(current, next);
+      }
+      cursor = current.nextSibling;
+    }
+    while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
+  };
+  const active = document.activeElement;
+  const action = active?.closest?.(".row-item, tr, .now-card");
+  children(root, template.content);
+  if (active?.isConnected && root.contains(active) && document.activeElement !== active) active.focus({ preventScroll: true });
+  if (active && !active.isConnected && root.isConnected) {
+    const fallback = action?.isConnected ? action : root.querySelector("main h1, main, button:not(:disabled), input:not([type=hidden])");
+    if (fallback) { fallback.setAttribute("tabindex", "-1"); fallback.focus({ preventScroll: true }); }
+  }
+}
+
+const eventBindings = new WeakMap();
+export function bindEvent(element, type, handler) {
+  if (!element) return;
+  let bindings = eventBindings.get(element);
+  if (!bindings) eventBindings.set(element, bindings = new Map());
+  if (bindings.has(type)) element.removeEventListener(type, bindings.get(type));
+  bindings.set(type, handler);
+  element.addEventListener(type, handler);
+}
+
+export function groupForm(form, groups) {
+  if (!form) return;
+  groups.forEach(([title, names]) => {
+    const blocks = [...new Set(names.map(name => form.querySelector(`[name="${name}"]`)?.closest(".field")?.closest(".field-row, .field")).filter(Boolean))];
+    // Move complete rows, keeping labels, validation and native form submission.
+    const rows = [...new Set(blocks.map(block => block.parentElement?.classList.contains("field-row") ? block.parentElement : block))];
+    if (!rows.length) return;
+    const section = document.createElement("fieldset");
+    section.className = "form-section";
+    const legend = document.createElement("legend");
+    legend.textContent = title;
+    rows[0].before(section);
+    section.append(legend, ...rows);
+  });
+}
+
 function icon(name) {
   const paths = {
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
@@ -55,7 +147,7 @@ export function header(session) {
               : `<a class="btn btn-ghost keep" href="#/login">Entrar</a>
                  <a class="btn" href="#/cadastro">Cadastrar</a>`
           }
-          <button class="menu-btn" data-action="menu" aria-label="Abrir menu">${icon("menu")}</button>
+          <button class="menu-btn" data-action="menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-nav">${icon("menu")}</button>
         </div>
       </div>
     </header>
@@ -191,22 +283,32 @@ export function toast(message, type = "") {
 }
 
 export function modal({ title, body, actions = "" }) {
+  const previousFocus = document.activeElement;
   const back = el(`
-    <div class="modal-back" role="dialog" aria-modal="true">
+    <div class="modal-back" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
-          <h3>${escapeHtml(title)}</h3>
-          <button class="icon-btn" data-close>${icon("close")}</button>
+          <h3 id="modal-title">${escapeHtml(title)}</h3>
+          <button class="icon-btn" data-close aria-label="Fechar janela">${icon("close")}</button>
         </div>
         <div class="modal-body">${body}</div>
         <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">${actions}</div>
       </div>
     </div>`);
-  const close = () => back.remove();
+  const close = () => { back.remove(); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); };
   back.addEventListener("click", (e) => {
     if (e.target === back || e.target.closest("[data-close]")) close();
   });
   document.body.appendChild(back);
+  back.addEventListener("keydown", e => {
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+    if (e.key !== "Tab") return;
+    const focusable = [...back.querySelectorAll("button:not(:disabled), input:not([type=hidden]), select, textarea, a[href]")].filter(el => el.getClientRects().length);
+    const first = focusable[0], last = focusable.at(-1);
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+  });
+  back.querySelector("input:not([type=hidden]), button")?.focus();
   return { el: back, close };
 }
 
@@ -214,7 +316,7 @@ export function field({ name, label, type = "text", value = "", placeholder = ""
   return `
     <div class="field">
       <label for="${name}">${escapeHtml(label)}</label>
-      <input id="${name}" name="${name}" type="${type}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? "required" : ""} ${autocomplete ? `autocomplete="${autocomplete}"` : ""} ${min ? `min="${escapeHtml(min)}"` : ""} ${max ? `max="${escapeHtml(max)}"` : ""}>
+      ${type === "textarea" ? `<textarea id="${name}" name="${name}" placeholder="${escapeHtml(placeholder)}" ${required ? "required" : ""}>${escapeHtml(value)}</textarea>` : `<input id="${name}" name="${name}" type="${type}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? "required" : ""} ${autocomplete ? `autocomplete="${autocomplete}"` : ""} ${min ? `min="${escapeHtml(min)}"` : ""} ${max ? `max="${escapeHtml(max)}"` : ""}>`}
       ${hint ? `<div class="hint">${hint}</div>` : ""}
       <div class="field-error" data-error-for="${name}" hidden></div>
     </div>`;
@@ -223,14 +325,14 @@ export function field({ name, label, type = "text", value = "", placeholder = ""
 export function clinicCard(c) {
   const end = c.endereco;
   return `
-    <article class="card clinic-card">
+    <article class="card clinic-card" data-key="clinic-${escapeHtml(c.id_clinica)}">
       <div class="thumb">
         ${c.foto ? `<img src="${escapeHtml(c.foto)}" alt="${escapeHtml(c.nome)}" loading="lazy">` : `<span class="avatar thumb-avatar">${escapeHtml(initials(c.nome))}</span>`}
         <span class="loc">${escapeHtml(end ? `${end.bairro}, ${end.cidade}` : "Fortaleza")}</span>
       </div>
       <div class="body">
         <h3>${escapeHtml(c.nome)}</h3>
-        <p>${escapeHtml(c.descricao || "").slice(0, 140)}${(c.descricao || "").length > 140 ? "…" : ""}</p>
+        <p>${escapeHtml(c.descricao || "Informações da clínica disponíveis na página de detalhes.")}</p>
         <div class="chips">${(c.especialidades || []).slice(0, 3).map((s) => `<span class="chip">${escapeHtml(s)}</span>`).join("")}</div>
         <div class="actions">
           <a class="btn btn-ghost btn-sm" href="#/clinica/${c.id_clinica}">Ver clínica</a>

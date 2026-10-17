@@ -6,6 +6,8 @@ import { APP } from "../config.js";
 import { db, onDbChange } from "../lib/db.js";
 import {
   avatar,
+  updateLiveView,
+  bindEvent,
   badge,
   bindSlotPicker,
   bot,
@@ -32,8 +34,13 @@ import {
 
 let unsub = null;
 let poll = null;
+let liveFrame = 0;
+let liveVersion = 0;
 
 export function stopPatientLive() {
+  liveVersion++;
+  cancelAnimationFrame(liveFrame);
+  liveFrame = 0;
   unsub?.();
   unsub = null;
   if (poll) clearInterval(poll);
@@ -42,8 +49,21 @@ export function stopPatientLive() {
 
 function startLive(render) {
   stopPatientLive();
-  unsub = onDbChange(render);
-  poll = setInterval(render, APP.pollMs);
+  const version = liveVersion;
+  let busy = false, queued = false;
+  const refresh = async () => {
+    if (version !== liveVersion) return;
+    if (busy) { queued = true; return; }
+    busy = true;
+    try { await render(); } catch (error) { console.error("Atualização da fila:", error); }
+    finally { busy = false; if (queued && version === liveVersion) { queued = false; schedule(); } }
+  };
+  const schedule = () => {
+    if (liveFrame || version !== liveVersion) return;
+    liveFrame = requestAnimationFrame(() => { liveFrame = 0; refresh(); });
+  };
+  unsub = onDbChange(schedule);
+  poll = setInterval(schedule, APP.pollMs);
 }
 
 export async function renderPatientHome(root, { session }) {
@@ -51,10 +71,7 @@ export async function renderPatientHome(root, { session }) {
   const paint = async (fromPoll = false) => {
     const list = await db().listAppointments({ id_paciente: session.id });
     const queue = await db().getPatientQueue(session.id);
-    const stamp = JSON.stringify({
-      ids: list.map((c) => `${c.id_consulta}:${c.status}:${c.data_hora}`),
-      q: queue && { p: queue.posicao, s: queue.consulta?.status, e: queue.estimativa },
-    });
+    const stamp = JSON.stringify({ list, queue });
     if (fromPoll && stamp === last) return;
     last = stamp;
     const upcoming = list.filter((c) => {
@@ -64,7 +81,7 @@ export async function renderPatientHome(root, { session }) {
     const next = upcoming[0];
     const hist = list.filter((c) => c.status === "Finalizada" || c.status === "Cancelada").slice().reverse();
 
-    root.innerHTML = `
+    updateLiveView(root, `
       ${header(session)}
       <main class="page page-app">
         <div class="wrap">
@@ -117,7 +134,7 @@ export async function renderPatientHome(root, { session }) {
                   upcoming.length
                     ? upcoming
                         .map(
-                          (c) => `<article class="row-item">
+                          (c) => `<article class="row-item" data-key="appointment-${c.id_consulta}">
                             ${avatar(c.clinica?.nome)}
                             <div>
                               <h4>${escapeHtml(c.clinica?.nome)}</h4>
@@ -145,7 +162,7 @@ export async function renderPatientHome(root, { session }) {
                     <tbody>${hist
                       .slice(0, 5)
                       .map(
-                        (c) => `<tr>
+                        (c) => `<tr data-key="history-${c.id_consulta}">
                           <td>${formatDateTime(c.data_hora)}</td>
                           <td>${escapeHtml(c.clinica?.nome || "")}</td>
                           <td>${escapeHtml(c.especialidade || "")}</td>
@@ -160,9 +177,9 @@ export async function renderPatientHome(root, { session }) {
       </main>
       ${footer()}
       ${bottomNav(session, "#/paciente")}
-    `;
+    `);
 
-    root.querySelector("[data-cancel]")?.addEventListener("click", async (e) => {
+    bindEvent(root.querySelector("[data-cancel]"), "click", async (e) => {
       if (!confirm("Cancelar esta consulta?")) return;
       try {
         await db().cancelAppointment(e.currentTarget.dataset.cancel);
@@ -172,23 +189,23 @@ export async function renderPatientHome(root, { session }) {
         toast(err.message, "danger");
       }
     });
-    root.querySelector("[data-reschedule]")?.addEventListener("click", (e) => {
+    bindEvent(root.querySelector("[data-reschedule]"), "click", (e) => {
       openReschedule(e.currentTarget.dataset.reschedule, paint);
     });
   };
 
   await paint(false);
-  startLive(() => paint(true));
+  if (root.isConnected) startLive(() => paint(true));
 }
 
 export async function renderPatientQueue(root, { session }) {
   let last = "";
   const paint = async (fromPoll = false) => {
     const queue = await db().getPatientQueue(session.id);
-    const stamp = JSON.stringify(queue && { p: queue.posicao, s: queue.consulta?.status, e: queue.estimativa, t: queue.total });
+    const stamp = JSON.stringify(queue);
     if (fromPoll && stamp === last) return;
     last = stamp;
-    root.innerHTML = `
+    updateLiveView(root, `
       ${header(session)}
       <main class="page page-app">
         <div class="wrap" style="max-width:720px">
@@ -225,15 +242,15 @@ export async function renderPatientQueue(root, { session }) {
       </main>
       ${footer()}
       ${bottomNav(session, "#/paciente/fila")}
-    `;
+    `);
   };
   await paint(false);
-  startLive(() => paint(true));
+  if (root.isConnected) startLive(() => paint(true));
 }
 
 export async function renderHistory(root, { session }) {
   const list = (await db().listAppointments({ id_paciente: session.id })).slice().reverse();
-  root.innerHTML = `
+  updateLiveView(root, `
     ${header(session)}
     <main class="page page-app">
       <div class="wrap">
@@ -246,7 +263,7 @@ export async function renderHistory(root, { session }) {
                 <tbody>${list
                   .map((c) => {
                     const can = c.status === "Agendada";
-                    return `<tr>
+                    return `<tr data-key="history-${c.id_consulta}">
                       <td>${formatDateTime(c.data_hora)}</td>
                       <td>${escapeHtml(c.clinica?.nome || "")}</td>
                       <td>${escapeHtml(c.especialidade || "")}</td>
@@ -266,18 +283,20 @@ export async function renderHistory(root, { session }) {
     </main>
     ${footer()}
     ${bottomNav(session, "#/paciente/historico")}
-  `;
+  `);
 
   root.querySelectorAll("[data-cancel]").forEach((b) =>
-    b.addEventListener("click", async () => {
+    bindEvent(b, "click", async () => {
       if (!confirm("Cancelar esta consulta?")) return;
-      await db().cancelAppointment(b.dataset.cancel);
-      toast("Consulta cancelada.", "ok");
-      renderHistory(root, { session });
+      try {
+        await db().cancelAppointment(b.dataset.cancel);
+        toast("Consulta cancelada.", "ok");
+        await renderHistory(root, { session });
+      } catch (err) { toast(err.message, "danger"); }
     })
   );
   root.querySelectorAll("[data-reschedule]").forEach((b) =>
-    b.addEventListener("click", () => openReschedule(b.dataset.reschedule, () => location.hash = "#/paciente/historico"))
+    bindEvent(b, "click", () => openReschedule(b.dataset.reschedule, () => renderHistory(root, { session })))
   );
 }
 
@@ -288,8 +307,8 @@ async function openReschedule(id, onDone) {
     title: "Reagendar consulta",
     body: `
       <p class="muted">${escapeHtml(ap.clinica?.nome)} · ${escapeHtml(ap.especialidade || "")}</p>
-      <div class="field"><label>Nova data</label><input type="date" name="data" value="${todayISO()}" min="${todayISO()}" max="${plusDaysISO(90)}"></div>
-      <div class="field"><label>Horários</label><div class="slots" id="rs-slots"></div><input type="hidden" name="horario"></div>
+      <div class="field"><label for="reschedule-date">Nova data</label><input id="reschedule-date" type="date" name="data" value="${todayISO()}" min="${todayISO()}" max="${plusDaysISO(90)}"></div>
+      <div class="field"><span>Horários</span><div class="slots" id="rs-slots" role="group" aria-label="Horários disponíveis"></div><input type="hidden" name="horario"></div>
     `,
     actions: `<button class="btn btn-ghost" data-close>Fechar</button><button class="btn" id="rs-ok">Confirmar</button>`,
   });

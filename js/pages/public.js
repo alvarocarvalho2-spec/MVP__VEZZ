@@ -16,6 +16,8 @@ import {
   header,
   renderSlotButtons,
   toast,
+  updateLiveView,
+  groupForm,
 } from "../lib/ui.js";
 import {
   escapeHtml,
@@ -51,7 +53,8 @@ export function stopHeroDemo() {
 }
 
 export async function renderHome(root, { session }) {
-  const featured = (await db().listClinics()).slice(0, 4);
+  const clinics = await db().listClinics();
+  const featured = clinics.slice(0, 4);
   root.innerHTML = `
     ${header(session)}
     <main>
@@ -67,10 +70,10 @@ export async function renderHome(root, { session }) {
               <button class="btn btn-lg" type="submit">Pesquisar</button>
             </form>
             <div class="hero-cta reveal" style="--d:.2s">
-              <a class="btn btn-lg" href="#/clinicas">Buscar clínicas</a>
-              <a class="btn btn-lg btn-ghost" href="#/como-funciona">Como funciona</a>
+              <a class="text-link" href="#/clinicas">Explorar todas as clínicas <span aria-hidden="true">↗</span></a>
+              <a class="text-link" href="#/como-funciona">Conheça o VEZZ <span aria-hidden="true">→</span></a>
             </div>
-            <p class="muted" style="margin-top:14px;font-size:13px;color:#8fa3cf">Clínicas em Fortaleza · pesquise sem cadastro</p>
+            <p class="muted" style="margin-top:14px;font-size:13px;color:#b0c3e2">Encontre seu próximo cuidado · pesquise sem cadastro</p>
           </div>
           <div class="hero-stage" id="heroStage" aria-label="Demonstração da fila do VEZZ">
             <div class="stage-glow" aria-hidden="true"></div>
@@ -88,8 +91,8 @@ export async function renderHome(root, { session }) {
               <div class="demo-side-head">Fila da clínica</div>
               <ul class="demo-rows" id="demoRows"></ul>
             </div>
-            <div class="demo-chip chip-a" data-depth="1.3"><b>18 min</b> de espera média</div>
-            <div class="demo-chip chip-b" data-depth="1.1"><b>4 clínicas</b> em Fortaleza</div>
+            <div class="demo-chip chip-a" data-depth="1.3"><span class="pulse-dot"></span> Seu tempo importa</div>
+            <div class="demo-chip chip-b" data-depth="1.1"><b>✓</b> Acompanhe cada etapa</div>
             <span class="demo-bot" id="heroBot" data-depth="0.7">${bot("calm", "bot-glow bot-float")}</span>
             <span class="demo-label">Demonstração — dados ilustrativos, sem clínica real</span>
           </div>
@@ -97,8 +100,8 @@ export async function renderHome(root, { session }) {
         <div class="wrap">
           <div class="stats reveal">
             <div class="stat"><b><span class="pulse-dot"></span>ao vivo</b><span>A fila se atualiza sozinha</span></div>
-            <div class="stat"><b><span class="count" data-count="18">18</span> min</b><span>Espera média por pessoa</span></div>
-            <div class="stat"><b><span class="count" data-count="4">4</span></b><span>Clínicas em Fortaleza</span></div>
+            <div class="stat"><b>Do seu jeito</b><span>Agende e acompanhe pelo celular</span></div>
+            <div class="stat"><b><span class="count" data-count="${clinics.length}">${clinics.length}</span></b><span>Clínica${clinics.length === 1 ? "" : "s"} na plataforma</span></div>
             <div class="stat"><b>CE</b><span>Nascido em Fortaleza</span></div>
           </div>
         </div>
@@ -108,25 +111,28 @@ export async function renderHome(root, { session }) {
         <div class="wrap">
           <div class="section-head reveal">
             <div>
-              <div class="kicker">Fortaleza</div>
-              <h2>Clínicas para visitar agora</h2>
+              <div class="kicker">Encontre seu cuidado</div>
+              <h2>O próximo passo começa aqui.</h2>
+              <p>Conheça as clínicas e escolha onde quer ser atendido.</p>
             </div>
             <a class="btn btn-ghost" href="#/clinicas">Ver todas</a>
           </div>
-          <div class="clinic-grid">${featured.map(clinicCard).join("")}</div>
+          ${featured.length ? `<div class="clinic-grid clinic-editorial" data-items="${featured.length}">${featured.map(clinicCard).join("")}</div>` : `<div class="empty card card-pad"><h3>Novas clínicas em breve</h3><p>As clínicas disponíveis para agendamento aparecerão aqui.</p><a class="btn btn-ghost" href="#/solicitar-clinica">Cadastrar uma clínica</a></div>`}
         </div>
       </section>
 
       <section class="jornada" id="jornada" aria-label="A jornada do atendimento no VEZZ">
         <div class="jornada-stage">
           <div class="jornada-inner">
+            <div class="j-intro"><div><div class="kicker">Do agendamento ao atendimento</div><h2>Com você, em cada etapa.</h2></div><span>Demonstração ilustrativa</span></div>
+            <nav class="j-nav" aria-label="Etapas do atendimento"><button type="button" aria-current="step">01 <span>Agende</span></button><button type="button">02 <span>Entre na fila</span></button><button type="button">03 <span>Acompanhe</span></button><button type="button">04 <span>Sua vez</span></button></nav>
             <div class="jornada-rail" aria-hidden="true"><i id="jornadaFill"></i></div>
             <div class="jornada-steps">
               <article class="j-step is-active">
                 <div class="j-copy">
                   <div class="kicker">Passo 01 · Agendar</div>
                   <h3>Escolha a clínica, o dia e o horário.</h3>
-                  <p>Pesquise clínicas, veja os horários livres e confirme em segundos. O VEZZ já deixa a sua posição reservada.</p>
+                  <p>Pesquise clínicas, veja os horários livres e confirme em segundos. No dia da consulta, você entra automaticamente na fila.</p>
                 </div>
                 <div class="j-visual">
                   <span class="j-bot">${bot("thinking", "bot-glow bot-float")}</span>
@@ -193,7 +199,7 @@ export async function renderHome(root, { session }) {
               <span class="split-bot">${bot("calm", "bot-glow")}</span>
               <div class="kicker">Pacientes</div>
               <h2>Sua vez, no seu tempo.</h2>
-              <p>Cadastro simples, pesquisa de clínicas, histórico e fila ao vivo. Chegue quando fizer sentido — não uma hora antes.</p>
+              <p>Cadastro simples, pesquisa de clínicas, histórico e fila ao vivo. Acompanhe a estimativa e siga a orientação de chegada da sua clínica.</p>
             </div>
             <a class="btn" href="#/cadastro">Criar conta de paciente</a>
           </article>
@@ -215,7 +221,7 @@ export async function renderHome(root, { session }) {
             <span class="cta-bot">${bot("joy", "bot-glow bot-float")}</span>
             <div>
               <div class="kicker">Comece hoje</div>
-              <h2>Pronto para acabar com a espera?</h2>
+              <h2>Seu tempo merece esse cuidado.</h2>
               <p>Cadastre-se como paciente ou leve o VEZZ para a sua clínica.</p>
             </div>
             <div class="cta-actions">
@@ -236,6 +242,7 @@ export async function renderHome(root, { session }) {
     const local = encodeURIComponent(fd.get("local") || "");
     location.hash = `#/clinicas?q=${q}&local=${local}`;
   });
+  if (!root.isConnected) return;
   stopHeroDemo();
   const stage = root.querySelector("#heroStage");
   heroDemoStop = startQueueDemo(stage);
@@ -271,6 +278,7 @@ export function renderClinicRequest(root, { session }) {
     return;
   }
   root.innerHTML = `${header(session)}<main class="page"><div class="wrap-xs card card-pad"><div class="kicker">Para clínicas</div><h1>Quer cadastrar sua clínica?</h1><p>Envie suas informações. A equipe VEZZ analisa a solicitação e entra em contato para orientar os próximos passos.</p><form id="clinic-request">${field({ name: "nome_clinica", label: "Nome da clínica", required: true })}${field({ name: "cnpj", label: "CNPJ", required: true })}${field({ name: "responsavel", label: "Nome do responsável", required: true })}${field({ name: "email_responsavel", label: "E-mail do responsável", type: "email", required: true })}${field({ name: "telefone_responsavel", label: "Telefone do responsável", required: true })}${field({ name: "telefone_clinica", label: "Telefone da clínica", required: true })}${field({ name: "especialidades", label: "Especialidades", placeholder: "Cardiologia, Clínica Geral", required: true })}<div class="field-row">${field({ name: "rua", label: "Rua", required: true })}${field({ name: "numero", label: "Número", required: true })}</div><div class="field-row">${field({ name: "bairro", label: "Bairro", required: true })}${field({ name: "cidade", label: "Cidade", required: true })}</div>${field({ name: "cep", label: "CEP", required: true })}${field({ name: "descricao", label: "Sobre a clínica", type: "textarea" })}<button class="btn btn-block">Enviar solicitação</button></form></div></main>${footer()}`;
+  groupForm(root.querySelector("#clinic-request"), [["A clínica", ["nome_clinica", "cnpj", "telefone_clinica", "especialidades", "descricao"]], ["Responsável pelo cadastro", ["responsavel", "email_responsavel", "telefone_responsavel"]], ["Endereço", ["rua", "numero", "bairro", "cidade", "cep"]]]);
   root.querySelector("#clinic-request").addEventListener("submit", async (e) => { e.preventDefault(); try { await db().createClinicRequest(Object.fromEntries(new FormData(e.target))); toast("Solicitação enviada. A equipe VEZZ entrará em contato.", "ok"); location.hash = "#/"; } catch (err) { toast(err.message, "danger"); } });
 }
 
@@ -309,6 +317,7 @@ export async function renderClinics(root, { session, query }) {
 
 export async function renderClinic(root, { session, params }) {
   const c = await db().getClinic(params.id);
+  if (!root.isConnected) return;
   if (!c) {
     root.innerHTML = `${header(session)}<main class="page"><div class="wrap"><h1>Clínica não encontrada</h1><a href="#/clinicas">Voltar</a></div></main>`;
     return;
@@ -351,6 +360,7 @@ export async function renderClinic(root, { session, params }) {
 
 export async function renderSchedule(root, { session, params }) {
   const c = await db().getClinic(params.id);
+  if (!root.isConnected) return;
   if (!c) {
     root.innerHTML = `${header(session)}<main class="page"><div class="wrap"><h1>Clínica não encontrada</h1></div></main>`;
     return;
@@ -415,46 +425,55 @@ export async function renderSchedule(root, { session, params }) {
   const slotsBox = root.querySelector("#slots");
   const hidden = form.querySelector("[name=horario]");
   let slotsStamp = "";
+  let slotRequest = 0;
 
   // Atualiza a grade consultando o banco de novo. Só re-renderiza quando a
   // disponibilidade muda (sem piscar), preservando o horário selecionado —
   // e avisa se ele acabou de ser ocupado por outro paciente.
   async function paintSlots() {
+    const request = ++slotRequest;
     const d = form.data.value;
     const keep = hidden.value;
-    hidden.value = "";
     if (!d) {
+      hidden.value = "";
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Escolha uma data.</p>`;
       return;
     }
     if (isPastDay(d)) {
+      hidden.value = "";
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Essa data já passou. Escolha hoje ou um dia futuro.</p>`;
       return;
     }
     const clash = await db().hasAppointmentOnDay(session.id, d);
+    if (request !== slotRequest || !root.isConnected) return;
     if (clash) {
+      hidden.value = "";
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Você já possui uma consulta neste dia. Cancele ou reagende a existente antes de marcar outra.</p>`;
       return;
     }
     const slots = await db().availableSlots(c.id_clinica, d);
+    if (request !== slotRequest || !root.isConnected) return;
     const free = slots.filter((s) => !s.taken);
     if (!slots.length) {
+      hidden.value = "";
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">A clínica não atende neste dia.</p>`;
       return;
     }
     if (!free.length) {
+      hidden.value = "";
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Não há horários livres neste dia.</p>`;
       return;
     }
-    const stamp = JSON.stringify(slots.map((s) => `${s.time}:${s.taken ? 1 : 0}`));
+    const stamp = d + JSON.stringify(slots.map((s) => `${s.time}:${s.taken ? 1 : 0}`));
     if (stamp === slotsStamp) return; // nada mudou: mantém seleção e foco
     slotsStamp = stamp;
-    slotsBox.innerHTML = renderSlotButtons(slots);
+    hidden.value = "";
+    updateLiveView(slotsBox, renderSlotButtons(slots));
     if (keep) {
       const sel = slots.find((s) => s.time === keep);
       if (sel && !sel.taken) {
@@ -468,10 +487,11 @@ export async function renderSchedule(root, { session, params }) {
 
   stopScheduleLive();
   await paintSlots();
+  if (!root.isConnected) return;
   form.data.addEventListener("change", paintSlots);
   bindSlotPicker(slotsBox, hidden);
   // Disponibilidade ao vivo: a grade se atualiza sozinha enquanto a tela está aberta
-  schedulePoll = setInterval(paintSlots, SCHEDULE_POLL_MS);
+  schedulePoll = setInterval(() => paintSlots().catch(error => console.error("Disponibilidade:", error)), SCHEDULE_POLL_MS);
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();

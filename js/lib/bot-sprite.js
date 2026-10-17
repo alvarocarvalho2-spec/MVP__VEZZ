@@ -152,8 +152,10 @@ export function setBotExpression(svgEl, expression) {
   if (!svgEl) return;
   const safe = BOT_EXPRESSIONS.includes(expression) ? expression : "calm";
   const use = svgEl.querySelector("use");
-  if (use) use.setAttribute("href", `#bot-${safe}`);
-  svgEl.classList.remove("bot-pop");
-  void svgEl.getBoundingClientRect();
-  svgEl.classList.add("bot-pop");
+  if (!use || use.getAttribute("href") === `#bot-${safe}`) return;
+  use.setAttribute("href", `#bot-${safe}`);
+  // A reação pertence ao rosto; a flutuação pertence ao mascote.
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    use.animate?.([{ opacity: 0.3 }, { opacity: 1 }], { duration: 320, easing: "ease-out" });
+  }
 }

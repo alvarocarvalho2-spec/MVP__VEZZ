@@ -6,6 +6,9 @@ import { APP } from "../config.js";
 import { db, onDbChange } from "../lib/db.js";
 import {
   addressLine,
+  updateLiveView,
+  bindEvent,
+  groupForm,
   avatar,
   badge,
   bot,
@@ -23,34 +26,46 @@ import { bindMasks } from "../lib/ui.js";
 
 let unsub = null;
 let poll = null;
-let lastStamp = "";
+let liveFrame = 0;
+let liveVersion = 0;
 
 export function stopManagerLive() {
+  liveVersion++;
+  cancelAnimationFrame(liveFrame);
+  liveFrame = 0;
   unsub?.();
   unsub = null;
   if (poll) clearInterval(poll);
   poll = null;
-  lastStamp = "";
 }
 
 function startLive(paint) {
   stopManagerLive();
-  unsub = onDbChange(() => paint(false));
-  poll = setInterval(() => paint(true), APP.pollMs);
+  const version = liveVersion;
+  let busy = false, queued = false;
+  const refresh = async (fromPoll = true) => {
+    if (version !== liveVersion) return;
+    if (busy) { queued = true; return; }
+    busy = true;
+    try { await paint(fromPoll); } catch (error) { console.error("Atualização do painel:", error); }
+    finally { busy = false; if (queued && version === liveVersion) { queued = false; schedule(false); } }
+  };
+  // A call-next operation emits finish + start. Paint the completed operation.
+  const schedule = (fromPoll = false) => {
+    if (liveFrame || version !== liveVersion) return;
+    liveFrame = requestAnimationFrame(() => { liveFrame = 0; refresh(fromPoll); });
+  };
+  unsub = onDbChange(() => schedule(false));
+  poll = setInterval(() => schedule(true), APP.pollMs);
 }
 
 async function stamp(idClinica) {
   const panel = await db().todayPanel(idClinica);
-  return JSON.stringify({
-    e: panel.emAtendimento?.id_consulta,
-    p: panel.proximo?.id_consulta,
-    a: panel.aguardando,
-    f: panel.finalizadas,
-    ids: panel.lista.map((x) => `${x.id_consulta}:${x.status}`),
-  });
+  return JSON.stringify(panel);
 }
 
 export async function renderManagerHome(root, { session }) {
+  let lastStamp = "";
   const clinic = await db().getClinic(session.id_clinica);
   const paint = async (fromPoll) => {
     if (fromPoll) {
@@ -61,13 +76,13 @@ export async function renderManagerHome(root, { session }) {
     const panel = await db().todayPanel(session.id_clinica);
     const now = panel.emAtendimento;
     const next = panel.proximo;
-    root.innerHTML = `
+    updateLiveView(root, `
       ${header(session)}
       <main class="page page-app">
         <div class="wrap">
           <div class="dash-top">
             <div>
-              <div class="kicker">${escapeHtml(clinic?.nome || "Clínica")} · </div>
+              <div class="kicker">${escapeHtml(clinic?.nome || "Clínica")}</div>
               <h1 style="display:flex;align-items:center;gap:12px"><span class="dash-bot">${bot("cool", "bot-glow")}</span>Painel do dia</h1>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -124,15 +139,16 @@ export async function renderManagerHome(root, { session }) {
       </main>
       ${footer()}
       ${bottomNav(session, "#/gestor")}
-    `;
+    `);
     bindQueueActions(root, session, () => paint(false));
   };
   await paint(false);
   lastStamp = await stamp(session.id_clinica);
-  startLive(paint);
+  if (root.isConnected) startLive(paint);
 }
 
 export async function renderQueue(root, { session }) {
+  let lastStamp = "";
   const clinic = await db().getClinic(session.id_clinica);
   const paint = async (fromPoll) => {
     if (fromPoll) {
@@ -143,7 +159,7 @@ export async function renderQueue(root, { session }) {
     const queue = await db().getQueue(session.id_clinica);
     const current = queue.find((q) => q.status === "Em Atendimento");
     const waiting = queue.filter((q) => q.status === "Agendada");
-    root.innerHTML = `
+    updateLiveView(root, `
       ${header(session)}
       <main class="page page-app">
         <div class="wrap">
@@ -176,7 +192,7 @@ export async function renderQueue(root, { session }) {
                   waiting.length
                     ? waiting
                         .map(
-                          (q, i) => `<article class="row-item">
+                          (q, i) => `<article class="row-item" data-key="queue-${q.id_consulta}">
                             <div class="pos-num" style="font-family:var(--display);font-size:28px;width:48px">${q.fila?.posicao || i + 1}</div>
                             <div>
                               <h4>${escapeHtml(q.paciente?.nome || "")}</h4>
@@ -197,16 +213,16 @@ export async function renderQueue(root, { session }) {
       </main>
       ${footer()}
       ${bottomNav(session, "#/gestor/fila")}
-    `;
+    `);
     bindQueueActions(root, session, () => paint(false));
   };
   await paint(false);
   lastStamp = await stamp(session.id_clinica);
-  startLive(paint);
+  if (root.isConnected) startLive(paint);
 }
 
 function bindQueueActions(root, session, refresh) {
-  root.querySelector("[data-next]")?.addEventListener("click", async () => {
+  bindEvent(root.querySelector("[data-next]"), "click", async () => {
     try {
       const n = await db().callNext(session.id_clinica);
       toast(n ? `${n.paciente?.nome || "Paciente"} chamado.` : "Não há próximo paciente.", n ? "ok" : "warn");
@@ -216,7 +232,7 @@ function bindQueueActions(root, session, refresh) {
     }
   });
   root.querySelectorAll("[data-start]").forEach((b) =>
-    b.addEventListener("click", async () => {
+    bindEvent(b, "click", async () => {
       try {
         await db().startService(b.dataset.start);
         toast("Atendimento iniciado.", "ok");
@@ -227,7 +243,7 @@ function bindQueueActions(root, session, refresh) {
     })
   );
   root.querySelectorAll("[data-finish]").forEach((b) =>
-    b.addEventListener("click", async () => {
+    bindEvent(b, "click", async () => {
       try {
         await db().finishService(b.dataset.finish);
         toast("Atendimento finalizado. A fila andou.", "ok");
@@ -245,7 +261,7 @@ function appointmentsTable(list, compact) {
     <thead><tr><th>Hora</th><th>Paciente</th><th>Especialidade</th><th>Senha</th><th>Status</th>${compact ? "" : "<th></th>"}</tr></thead>
     <tbody>${list
       .map(
-        (c) => `<tr>
+        (c) => `<tr data-key="appointment-${c.id_consulta}">
           <td>${formatTime(c.data_hora)}</td>
           <td>${escapeHtml(c.paciente?.nome || "")}</td>
           <td>${escapeHtml(c.especialidade || "")}</td>
@@ -271,7 +287,7 @@ export async function renderAppointments(root, { session }) {
   const list = await db().listAppointments({ id_clinica: session.id_clinica });
   const today = list.filter((c) => new Date(c.data_hora).toDateString() === new Date().toDateString());
   const others = list.filter((c) => new Date(c.data_hora).toDateString() !== new Date().toDateString());
-  root.innerHTML = `
+  updateLiveView(root, `
     ${header(session)}
     <main class="page page-app">
       <div class="wrap">
@@ -285,7 +301,7 @@ export async function renderAppointments(root, { session }) {
     </main>
     ${footer()}
     ${bottomNav(session, "#/gestor/consultas")}
-  `;
+  `);
   bindQueueActions(root, session, () => renderAppointments(root, { session }));
 }
 
@@ -382,7 +398,7 @@ export async function renderClinicAdmin(root, { session }) {
             ${field({ name: "cnpj", label: "CNPJ", value: c.cnpj })}
             ${field({ name: "telefone", label: "Telefone", value: c.telefone })}
           </div>
-          <div class="field"><label>Descrição</label><textarea name="descricao">${escapeHtml(c.descricao || "")}</textarea></div>
+          <div class="field"><label for="descricao">Descrição</label><textarea id="descricao" name="descricao">${escapeHtml(c.descricao || "")}</textarea></div>
           ${field({ name: "rua", label: "Rua", value: end.rua || "" })}
           <div class="field-row">
             ${field({ name: "numero", label: "Número", value: end.numero || "" })}
@@ -422,6 +438,7 @@ export async function renderClinicAdmin(root, { session }) {
   `;
   bindMasks(root);
   let pendingFoto = c.foto || "";
+  groupForm(root.querySelector("#cli"), [["Identificação e contato", ["nome", "cnpj", "telefone", "descricao"]], ["Endereço", ["rua", "numero", "bairro", "cidade", "cep"]]]);
   const fotoInput = root.querySelector("#clinic-photo");
   fotoInput?.addEventListener("change", async () => {
     const file = fotoInput.files?.[0];

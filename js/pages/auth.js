@@ -4,7 +4,7 @@
 import { APP, DEFAULT_HOURS } from "../config.js";
 import { db } from "../lib/db.js";
 import { applyErrors, validarCNPJ, validarCPF, validarEmail, validarNome, validarSenha, validarTelefone, validarCEP } from "../lib/validators.js";
-import { bindMasks, bindPhotoUpload, bot, field, header, photoUpload, toast } from "../lib/ui.js";
+import { bindMasks, bindPhotoUpload, bot, field, groupForm, header, photoUpload, toast } from "../lib/ui.js";
 import { escapeHtml } from "../lib/utils.js";
 
 function authLayout(session, visual, form, botExpr = "calm") {
@@ -83,7 +83,7 @@ export function renderRegisterPatient(root, { session }) {
          ${field({ name: "telefone", label: "Telefone", placeholder: "(85) 98888-0000", required: true })}
        </div>
        ${field({ name: "email", label: "E-mail", type: "email", required: true, autocomplete: "email" })}
-       ${field({ name: "senha", label: "Senha", type: "password", hint: "Mínimo de 6 caracteres. Armazenada com hash SHA-256.", required: true, autocomplete: "new-password" })}
+       ${field({ name: "senha", label: "Senha", type: "password", hint: "Use pelo menos 6 caracteres.", required: true, autocomplete: "new-password" })}
        <button class="btn btn-lg btn-block" type="submit">Cadastrar</button>
        <p><a href="#/">Cancelar</a> · Já tem conta? <a href="#/login">Entrar</a></p>
        <p class="muted">Para cadastrar uma clínica, <a href="#/solicitar-clinica">envie uma solicitação</a>.</p>
@@ -91,6 +91,7 @@ export function renderRegisterPatient(root, { session }) {
     "shy"
   );
   const form = root.querySelector("#reg");
+  groupForm(form, [["Seus dados", ["nome", "cpf", "telefone"]], ["Seu acesso", ["email", "senha"]]]);
   bindMasks(form);
   form.addEventListener("submit", async (e) => {
     e.preventDefault();

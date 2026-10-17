@@ -513,10 +513,8 @@ p { margin: 0 0 1em; color: var(--ink-soft); }
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
-  transition: transform .2s ease, box-shadow .2s ease;
+  min-width: 0;
 }
-.clinic-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
 .clinic-card .thumb {
   height: 210px;
   position: relative;
@@ -913,6 +911,7 @@ table.data tr:hover td { background: color-mix(in srgb, var(--teal-mist) 70%, va
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 

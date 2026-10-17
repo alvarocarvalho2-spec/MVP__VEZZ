@@ -1,198 +1,170 @@
-/**
- * VEZZ — motion: reveal on scroll, parallax, contadores e a demonstração da fila.
- * Tudo com transform/opacity (GPU) + IntersectionObserver. Respeita
- * prefers-reduced-motion em todos os pontos de entrada.
- */
-
+/** Motion is owned by the current view, including observers and media listeners. */
 import { setBotExpression } from "./bot-sprite.js";
+const preference = () => matchMedia("(prefers-reduced-motion: reduce)");
+const reduced = () => preference().matches;
+let stopReveal = () => {};
+export function initMotion() { document.documentElement.classList.add("js"); }
+export function stopMotion() { stopReveal(); stopReveal = () => {}; }
 
-const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-let revealObserver = null;
-
-/** Marca o documento como "JS ativo" (habilita o estado inicial dos reveals). */
-export function initMotion() {
-  document.documentElement.classList.add("js");
-}
-
-/** Observa .reveal dentro de root; ao entrar, anima contadores [data-count]. */
 export function initReveal(root) {
+  stopMotion();
   if (!root) return;
-  if (revealObserver) revealObserver.disconnect();
-  if (reduced()) {
-    root.querySelectorAll(".reveal").forEach((el) => el.classList.add("in"));
-    root.querySelectorAll("[data-count]").forEach(animateCount);
-    return;
-  }
-  revealObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((en) => {
-        if (!en.isIntersecting) return;
-        en.target.classList.add("in");
-        if (en.target.matches("[data-count]")) animateCount(en.target);
-        en.target.querySelectorAll("[data-count]").forEach(animateCount);
-        revealObserver.unobserve(en.target);
-      });
-    },
-    { threshold: 0.18, rootMargin: "0px 0px -40px 0px" }
-  );
-  root.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
+  const media = preference(), pending = new Set(), ambient = new Set(), frames = new Set();
+  const reveal = el => {
+    el.classList.add("in");
+    el.querySelectorAll("[data-count]").forEach(animateCount);
+    if (el.matches("[data-count]")) animateCount(el);
+  };
+  const observer = new IntersectionObserver(entries => entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    reveal(en.target); pending.delete(en.target); observer.unobserve(en.target);
+  }), { threshold: 0, rootMargin: "0px 0px -24px 0px" });
+  const ambience = new IntersectionObserver(entries => entries.forEach(en => {
+    en.target.classList.toggle("motion-paused", !en.isIntersecting || document.hidden);
+  }));
+  const sync = () => {
+    if (media.matches) pending.forEach(reveal);
+    ambient.forEach(el => el.classList.toggle("motion-paused", document.hidden || el.getBoundingClientRect().bottom < 0 || el.getBoundingClientRect().top > innerHeight));
+  };
+  const register = () => {
+    root.querySelectorAll("main h1, .page > .wrap-s > h2, .page > .wrap-s > p, .clinic-card, .dash-top, .auth-visual > h2, .auth-visual > p, .auth-form > h1, .grid-2 > .card, .grid-2 > aside, .queue-board > section, .kpi-grid > .kpi, .j-step").forEach((el, i) => {
+      if (el.closest(".jornada.is-enhanced") || el.closest(".reveal") || el.matches("form")) return;
+      el.classList.add("reveal");
+      el.style.setProperty("--d", `${Math.min(i % 4, 3) * 65}ms`);
+    });
+    root.querySelectorAll(".reveal:not(.motion-ready)").forEach(el => {
+      el.classList.add("motion-ready");
+      if (el.matches("form") || el.querySelector("input, select, textarea") || media.matches) reveal(el);
+      else { pending.add(el); observer.observe(el); }
+    });
+    root.querySelectorAll(".hero-stage, .j-visual, .auth-bot, .cta-bot, .hero-badge, .stats, .bot-float, .badge.live").forEach(el => {
+      if (ambient.has(el)) return;
+      ambient.add(el); ambience.observe(el);
+    });
+  };
+  register();
+  const mutations = new MutationObserver(() => {
+    const frame = requestAnimationFrame(() => { frames.delete(frame); register(); });
+    frames.add(frame);
+  });
+  mutations.observe(root, { childList: true, subtree: true });
+  media.addEventListener("change", sync);
+  document.addEventListener("visibilitychange", sync);
+  stopReveal = () => {
+    observer.disconnect(); ambience.disconnect(); mutations.disconnect();
+    media.removeEventListener("change", sync); document.removeEventListener("visibilitychange", sync);
+    frames.forEach(cancelAnimationFrame); pending.forEach(reveal);
+  };
 }
 
-/** Contador com ease-out; trava em 1x por elemento. */
 export function animateCount(el) {
   if (!el || el.dataset.counted) return;
   el.dataset.counted = "1";
-  const to = Number(el.dataset.count || 0);
-  if (reduced() || !Number.isFinite(to)) {
-    el.textContent = to;
-    return;
-  }
-  const dur = 900;
-  const t0 = performance.now();
-  const step = (t) => {
-    const p = Math.min(1, (t - t0) / dur);
-    el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3)));
-    if (p < 1) requestAnimationFrame(step);
+  const to = Number(el.dataset.count);
+  if (!Number.isFinite(to)) return;
+  if (reduced()) { el.textContent = to; return; }
+  const start = performance.now();
+  const frame = t => {
+    if (!el.isConnected) return;
+    const p = reduced() ? 1 : Math.min(1, (t - start) / 650);
+    el.textContent = Math.round(to * (1 - (1 - p) ** 3));
+    if (p < 1) requestAnimationFrame(frame);
   };
-  requestAnimationFrame(step);
+  requestAnimationFrame(frame);
 }
 
-/** Re-dispara o "pop" num elemento (ex.: posição que mudou). */
 export function tick(el) {
   if (!el || reduced()) return;
-  el.classList.remove("pop");
-  void el.offsetWidth;
-  el.classList.add("pop");
+  el.animate?.([{ opacity: 0.45, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 300, easing: "ease-out" });
 }
 
-/** Parallax leve no palco do hero (só desktop com mouse; usa a prop `translate`). */
 export function initParallax(stage) {
-  if (!stage || reduced() || !window.matchMedia("(pointer: fine)").matches) return () => {};
-  const layers = stage.querySelectorAll("[data-depth]");
+  if (!stage) return () => {};
+  const layers = [...stage.querySelectorAll("[data-depth]")];
   let raf = 0;
-  const onMove = (e) => {
-    if (raf) return;
+  const reset = () => layers.forEach(el => el.style.removeProperty("translate"));
+  const move = e => {
+    if (reduced() || !matchMedia("(pointer: fine)").matches || raf) return;
+    const { clientX, clientY } = e;
     raf = requestAnimationFrame(() => {
       raf = 0;
       const r = stage.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width - 0.5;
-      const y = (e.clientY - r.top) / r.height - 0.5;
-      layers.forEach((el) => {
+      if (!r.width) return;
+      layers.forEach(el => {
         const d = Number(el.dataset.depth || 0.5);
-        el.style.translate = `${(-x * d * 18).toFixed(1)}px ${(-y * d * 12).toFixed(1)}px`;
+        el.style.translate = `${(-(clientX - r.left - r.width / 2) / r.width * d * 24).toFixed(1)}px ${(-(clientY - r.top - r.height / 2) / r.height * d * 18).toFixed(1)}px`;
       });
     });
   };
-  stage.addEventListener("mousemove", onMove);
-  return () => stage.removeEventListener("mousemove", onMove);
+  stage.addEventListener("pointermove", move); stage.addEventListener("pointerleave", reset);
+  const media = preference(); media.addEventListener("change", reset);
+  return () => { cancelAnimationFrame(raf); reset(); stage.removeEventListener("pointermove", move); stage.removeEventListener("pointerleave", reset); media.removeEventListener("change", reset); };
 }
 
-/* ----- demonstração da fila (hero) — dados ilustrativos, sem clínica real ----- */
-const DEMO_NAMES = [
-  ["Ana Clara", "Cardiologia"],
-  ["Bruno Lima", "Clínica Geral"],
-  ["Carla Mendes", "Pediatria"],
-  ["Diego Rocha", "Ortopedia"],
-  ["Elisa Prado", "Dermatologia"],
-];
-const DEMO_TICKETS = ["A-042", "B-017", "C-103", "A-058", "D-221", "B-064", "C-147"];
-
-/**
- * Faz a fila da demonstração "andar": a posição desce, chega a vez, e o ciclo
- * recomeça com outra senha. Retorna a função de parar.
- */
+const names = [["Ana Clara", "Cardiologia"], ["Bruno Lima", "Clínica Geral"], ["Carla Mendes", "Pediatria"]];
+const tickets = ["A-042", "B-017", "C-103", "A-058"];
 export function startQueueDemo(stage) {
   if (!stage) return () => {};
-  const posEl = stage.querySelector("#demoPos");
-  const labelEl = stage.querySelector("#demoPosLabel");
-  const barEl = stage.querySelector("#demoBar");
-  const waitEl = stage.querySelector("#demoWait");
-  const ticketEl = stage.querySelector("#demoTicket");
-  const rowsEl = stage.querySelector("#demoRows");
-  const main = stage.querySelector(".demo-main");
-  const heroBotSvg = stage.querySelector("#heroBot svg");
-  let i = 0;
-  let pos = 3;
-  let ticketIdx = 0;
-
-  const renderMain = (you) => {
-    if (ticketEl) ticketEl.textContent = DEMO_TICKETS[ticketIdx % DEMO_TICKETS.length];
-    if (labelEl) labelEl.textContent = you ? "É a sua vez" : "Sua posição";
-    if (posEl) {
-      posEl.textContent = you ? "✓" : pos;
-      tick(posEl);
-    }
-    if (barEl) barEl.style.width = you ? "100%" : `${(4 - pos) * 33}%`;
-    if (waitEl) waitEl.textContent = you ? "0 min" : `${(pos - 1) * 18} min`;
-    main?.classList.toggle("is-you", you);
-    if (heroBotSvg) setBotExpression(heroBotSvg, you ? "joy" : "calm");
+  const find = s => stage.querySelector(s);
+  let pos = 3, index = 0, timer, visible = false;
+  const render = (animate = false) => {
+    const you = pos === 0;
+    find("#demoTicket").textContent = tickets[index % tickets.length];
+    find("#demoPosLabel").textContent = you ? "É a sua vez" : "Sua posição";
+    find("#demoPos").textContent = you ? "✓" : pos;
+    if (animate) tick(find("#demoPos"));
+    find("#demoBar").style.width = `${you ? 100 : (4 - pos) * 33}%`;
+    find("#demoWait").textContent = `${Math.max(0, pos - 1) * 18} min`;
+    find(".demo-main").classList.toggle("is-you", you);
+    setBotExpression(find("#heroBot svg"), you ? "joy" : "calm");
+    find("#demoRows").innerHTML = names.map(([name, specialty], k) => `<li class="${k === 0 ? "is-now" : ""}"><span class="avatar">${name.split(" ").map(n => n[0]).join("")}</span><span class="who"><b>${name}</b><span>${k === 0 ? `Em atendimento · ${specialty}` : `Posição ${k + Math.max(1, pos)}`}</span></span><b>${k === 0 ? "0" : k + Math.max(1, pos)}</b></li>`).join("");
   };
-
-  const renderRows = () => {
-    if (!rowsEl) return;
-    rowsEl.innerHTML = [0, 1, 2]
-      .map((k) => {
-        const [nome, esp] = DEMO_NAMES[(i + k) % DEMO_NAMES.length];
-        const now = k === 0;
-        const iniciais = nome.split(" ").map((w) => w[0]).join("");
-        return `<li class="${now ? "is-now" : ""}">
-          <span class="avatar">${iniciais}</span>
-          <span class="who"><b>${nome}</b><span>${now ? "Em atendimento · " + esp : "Posição " + (k + Math.max(pos, 1))}</span></span>
-          <b>${now ? "0" : k + Math.max(pos, 1)}</b>
-        </li>`;
-      })
-      .join("");
+  const media = preference();
+  const sync = () => {
+    clearInterval(timer);
+    if (!visible || document.hidden || media.matches) return;
+    timer = setInterval(() => { if (pos === 0) { pos = 3; index++; } else pos--; render(true); }, 3200);
   };
-
-  renderMain(false);
-  renderRows();
-  if (reduced()) return () => {};
-  const timer = setInterval(() => {
-    i++;
-    if (pos > 1) {
-      pos--;
-      renderMain(false);
-    } else if (pos === 1) {
-      pos = 0;
-      renderMain(true);
-    } else {
-      pos = 3;
-      ticketIdx++;
-      renderMain(false);
-    }
-    renderRows();
-  }, 2600);
-  return () => clearInterval(timer);
+  const observer = new IntersectionObserver(entries => { visible = entries[0].isIntersecting; sync(); });
+  observer.observe(stage);
+  document.addEventListener("visibilitychange", sync); media.addEventListener("change", sync);
+  render();
+  return () => { clearInterval(timer); observer.disconnect(); document.removeEventListener("visibilitychange", sync); media.removeEventListener("change", sync); };
 }
 
-
-/**
- * Jornada do atendimento (scroll storytelling): palco sticky, os passos
- * aparecem conforme a rolagem, com a trilha de progresso preenchendo.
- * Retorna a função de parar (remover o listener de scroll).
- */
 export function initJornada(section) {
   if (!section) return () => {};
   const steps = [...section.querySelectorAll(".j-step")];
+  const buttons = [...section.querySelectorAll(".j-nav button")];
   const fill = section.querySelector("#jornadaFill");
-  if (reduced() || !steps.length) return () => {};
-  let ticking = false;
+  const media = matchMedia("(min-width: 961px) and (min-height: 650px) and (prefers-reduced-motion: no-preference)");
+  let raf = 0, previous = -1;
   const update = () => {
-    ticking = false;
+    raf = 0;
+    section.classList.toggle("is-enhanced", media.matches);
     const r = section.getBoundingClientRect();
-    const total = Math.max(1, r.height - window.innerHeight);
-    const p = Math.min(1, Math.max(0, -r.top / total));
-    const idx = Math.min(steps.length - 1, Math.floor(p * steps.length));
-    steps.forEach((s, i) => s.classList.toggle("is-active", i === idx));
-    if (fill) fill.style.transform = `scaleY(${p})`;
+    const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--header")) || 72;
+    const p = Math.min(1, Math.max(0, (header - r.top) / Math.max(1, r.height - innerHeight + header)));
+    const index = media.matches ? Math.min(3, Math.floor(p * 4)) : 0;
+    if (index !== previous) {
+      previous = index;
+      steps.forEach((step, i) => step.classList.toggle("is-active", i === index));
+      buttons.forEach((button, i) => button.setAttribute("aria-current", i === index ? "step" : "false"));
+    }
+    steps.forEach((step, i) => { step.inert = media.matches && i !== index; step.setAttribute("aria-hidden", String(step.inert)); });
+    if (fill) fill.style.transform = `scaleX(${p})`;
   };
-  const onScroll = () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(update);
-  };
-  window.addEventListener("scroll", onScroll, { passive: true });
-  update();
-  return () => window.removeEventListener("scroll", onScroll);
+  const scroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+  const handlers = buttons.map((button, i) => {
+    const handler = () => {
+      if (!media.matches) return;
+      const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--header")) || 72;
+      const total = section.offsetHeight - innerHeight + header;
+      window.scrollTo({ top: section.getBoundingClientRect().top + scrollY - header + total * (i + 0.2) / 4, behavior: "smooth" });
+    };
+    button.addEventListener("click", handler); return handler;
+  });
+  window.addEventListener("scroll", scroll, { passive: true }); window.addEventListener("resize", scroll);
+  media.addEventListener("change", update); update();
+  return () => { cancelAnimationFrame(raf); window.removeEventListener("scroll", scroll); window.removeEventListener("resize", scroll); media.removeEventListener("change", update); buttons.forEach((b, i) => b.removeEventListener("click", handlers[i])); };
 }

@@ -16,7 +16,7 @@ function parseHash() {
 export function startRouter(onChange) {
   const run = () => onChange(parseHash());
   window.addEventListener("hashchange", run);
-  if (!location.hash) location.hash = "#/";
+  if (!location.hash) history.replaceState(null, "", "#/");
   run();
   return () => window.removeEventListener("hashchange", run);
 }
