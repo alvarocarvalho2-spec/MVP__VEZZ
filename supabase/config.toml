@@ -1,0 +1,5 @@
+# Preenchido automaticamente pelo comando: npx supabase link --project-ref <REFERENCE_ID>
+project_id = "uexqqbozfmdswajdatua"
+
+[functions.accept-clinic-invite]
+verify_jwt = false
