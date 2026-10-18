@@ -1,14 +1,14 @@
 # Auditoria VEZZ — 18/10/2026
 
-Foram encontradas falhas de autorização, integridade de agendamentos, recuperação de senha, tratamento de erros e acessibilidade. As correções estão implementadas e testadas no repositório. **A migração, a Edge Function e o frontend ainda não foram publicados. Os riscos identificados nas regras atuais de produção continuam pendentes de publicação.**
+Foram encontradas falhas de autorização, integridade de agendamentos, recuperação de senha, tratamento de erros e acessibilidade. **As correções foram publicadas em produção em 18/10/2026, após autorização do usuário, com manutenção coordenada, migração, Edge Function e frontend.** A liberação do código está no commit `cfd40869bf8e1a46371ef84b631e255943d99afd`. Veja [o registro de publicação](PUBLICACAO-2026-10-18.md).
 
-Não houve criação, alteração ou exclusão de pacientes, consultas, usuários ou arquivos em produção. O projeto Supabase `MVP VEZZ` foi inspecionado somente por consultas de metadados e contagens agregadas. Os testes funcionais usam dados sintéticos, LocalAdapter, PostgreSQL isolado em memória e serviços simulados.
+Não houve criação, alteração ou exclusão de pacientes, consultas ou usuários em produção. Na auditoria, o Supabase foi inspecionado por consultas de metadados e contagens agregadas; na publicação autorizada, foram alterados schema, permissões, configurações do bucket e código da Edge Function. Os testes funcionais usam dados sintéticos e serviços isolados. A verificação do site publicado bloqueou requisições de gravação.
 
 ## Resultados verificáveis
 
 | Bateria | Resultado | Evidência |
 |---|---|---|
-| Segurança, adaptadores, PostgreSQL/RLS, transações e Edge Function | 84 testes aprovados | `npm test`; `tests/security.test.mjs`, `tests/database.test.mjs`, `tests/edge.test.mjs` |
+| Segurança, adaptadores, PostgreSQL/RLS, transações e Edge Function | 85 testes aprovados | `npm test`; `tests/security.test.mjs`, `tests/database.test.mjs`, `tests/edge.test.mjs` |
 | Lógica e geometria das animações | 20 verificações aprovadas | `npm run test:logic` |
 | Nova matriz de navegador | 155 verificações aprovadas | `npm run test:browser`; `output/playwright/audit-results.json` |
 | Cenários legados de navegador | 88 + 48 + 17 verificações aprovadas | `node tests/browser.mjs --local --verify --extended --lifecycle`; JSONs em `tests/artifacts/` |
@@ -32,32 +32,32 @@ As contagens são de verificações executadas, com sobreposição entre bateria
 
 ## Achados e correções
 
-“Banco/Edge pendentes” significa que a correção passou localmente e precisa ser publicada para valer na produção.
+As correções da tabela foram publicadas. Permanecem os limites e itens de configuração detalhados ao final, incluindo proteção contra senhas vazadas desativada no Auth.
 
 | ID | Gravidade | Evidência e impacto | Correção e aceite verificado | Publicação |
 |---|---|---|---|---|
-| VZ-01 | Alta | A policy publicada de pacientes permitia a qualquer gestor ler todos os pacientes. Reproduzida no schema anterior em PostgreSQL isolado. | Leitura limitada aos pacientes com consulta na clínica do gestor, com helper privado que evita recursão RLS. Matriz de seis identidades aprovada. | Banco pendente |
-| VZ-02 | Alta | O paciente podia alterar o próprio status diretamente para “Em Atendimento”. Reproduzido no schema anterior. | Trigger distingue paciente/gestor e valida transições; paciente não inicia nem finaliza atendimento. | Banco pendente |
-| VZ-03 | Alta | Funções internas `SECURITY DEFINER`, incluindo reindexação com escrita, tinham EXECUTE para anônimos. Confirmado nos catálogos e advisors publicados. | EXECUTE revogado das funções internas; dados agregados de fila exigem autenticação e vínculo. Privilégios TRUNCATE/REFERENCES/TRIGGER também reduzidos como defesa adicional. | Banco pendente |
-| VZ-04 | Alta | Faltavam garantias de uma consulta ativa por paciente/dia e um atendimento por clínica. Verificações da interface podiam ser contornadas ou disputar entre si. | Índices únicos parciais garantem ambas as regras, inclusive contra inserções privilegiadas. | Banco pendente |
-| VZ-05 | Alta | Consulta, entrada/saída da fila e timestamps eram alterados em requisições separadas; falha parcial podia deixar estado inconsistente. | Trigger sincroniza tudo na transação da consulta. Chamar próximo usa RPC transacional com conferência do atendimento esperado. | Banco e frontend pendentes |
-| VZ-06 | Alta | Solicitação pública podia trazer `status='Aprovada'`; aprovação administrativa e geração do convite eram independentes. | Policy exige solicitação pendente sem análise; RPC de análise bloqueia a linha e aprova/recusa uma única vez. | Banco e frontend pendentes |
-| VZ-07 | Alta | Convite era consumido depois de criar usuário, clínica, endereço e gestor; não havia reserva atômica, expiração nem vinculação ao e-mail aprovado. | Reserva condicional, validade de sete dias, e-mail do responsável e finalização relacional transacional. Concorrência do handler cria só um usuário. Falhas SQL provocam compensação. | Banco e Edge pendentes |
-| VZ-08 | Alta | Horários e chaves de dias eram concatenados como HTML na página pública e na visualização da clínica. | Escape dos valores, inclusive chaves inesperadas; teste de HTML armazenado e CSP adicionada. | Frontend pendente |
-| VZ-09 | Alta | A conclusão de recuperação de senha Supabase apenas lançava uma exceção. | Callback validado, tokens removidos da URL, formulário e PUT autenticado para nova senha; sessão de recuperação não dá acesso ao painel. | Frontend pendente |
-| VZ-10 | Média | RPC podia renovar a sessão indefinidamente; renovações concorrentes disputavam tokens; resposta pendente podia restaurar sessão após logout. | Uma repetição por chamada, renovação compartilhada e conferência da sessão antes de gravar o resultado. | Frontend pendente |
-| VZ-11 | Média | Erro de compressão/validação fazia o upload enviar o arquivo original, contornando tipo/tamanho. Bucket publicado não tinha limite nem MIME permitido. | Somente JPG/PNG/WEBP, até 6 MB, sem fallback inseguro; limites também no bucket. | Frontend e banco pendentes |
-| VZ-12 | Média | RLS podia impedir PATCH e devolver zero linhas, enquanto a interface anunciava sucesso. | Escritas exigem exatamente uma linha afetada; indisponibilidade de registro vira erro acionável. | Frontend pendente |
-| VZ-13 | Média | Falha na RPC de ocupação caía em leitura parcial escondida por RLS, anunciando horários de outros pacientes como livres. | Disponibilidade falha explicitamente, preservando a garantia dos índices do banco. | Frontend pendente |
-| VZ-14 | Média | Dia era filtrado após baixar o histórico; limites de página da API podiam ocultar consultas recentes e pacientes posteriores ao primeiro lote. | Filtro diário enviado ao servidor, paginação ordenada e IDs de pacientes consultados em lotes menores. | Frontend pendente |
-| VZ-15 | Média | Data/hora dependiam do fuso do navegador, enquanto o banco interpreta a agenda em São Paulo. | Datas, horários, ocupação e virada do dia usam o fuso da clínica. Quatro fusos testados. | Frontend pendente |
-| VZ-16 | Média | Atendimento anterior à meia-noite podia sumir do painel do dia, impedindo chamar o próximo com o atendimento esperado. | Atendimento em andamento continua acessível até finalizar, inclusive após a virada do dia. | Frontend pendente |
-| VZ-17 | Média | Ao passar de clínica ociosa para atendimento iniciado, o botão era recriado e o foco se perdia. | Resumo e ações têm estrutura estável, preservando identidade e foco do botão. Regressão combinada aprovada. | Frontend pendente |
-| VZ-18 | Média | Contraste insuficiente em textos auxiliares, status e dia fechado; erros de formulário sem associação acessível. | Tokens de contraste corrigidos, links textuais sublinhados, erros com `aria-invalid`/`aria-describedby` e envio duplicado bloqueado nos formulários afetados. | Frontend pendente |
-| VZ-19 | Média | Servidor de desenvolvimento escutava toda a rede e podia servir arquivos ocultos/listagens. Hospedagem não tinha CSP/anti-frame. | Servidor usa loopback por padrão, bloqueia arquivos ocultos/listagens e compartilha cabeçalhos com Vercel. | Local corrigido; hospedagem pendente |
-| VZ-20 | Média | Reagendamento local excluía pelo texto do horário antigo, podendo ignorar o mesmo horário ocupado em outro dia. | Exclusão por ID, validação do dia do paciente e do funcionamento. | Frontend pendente |
-| VZ-21 | Baixa | URI malformada interrompia o roteador; perfil Supabase inexistente virava paciente fictício; credenciais demo apareciam em produção. | Rota inválida recuperável, cadastro incompleto explícito, sessão parcial limpa e caixa demo restrita ao modo local. | Frontend pendente |
-| VZ-22 | Média | Alocação da fila promovia lock da tabela inteira dentro do INSERT; o mesmo padrão concorrente pode provocar deadlock e bloquear clínicas independentes. | Alocação serializada por clínica/dia com advisory lock transacional; funções internas continuam inacessíveis pela API. | Banco pendente |
+| VZ-01 | Alta | A policy publicada de pacientes permitia a qualquer gestor ler todos os pacientes. Reproduzida no schema anterior em PostgreSQL isolado. | Leitura limitada aos pacientes com consulta na clínica do gestor, com helper privado que evita recursão RLS. Matriz de seis identidades aprovada. | Publicado |
+| VZ-02 | Alta | O paciente podia alterar o próprio status diretamente para “Em Atendimento”. Reproduzido no schema anterior. | Trigger distingue paciente/gestor e valida transições; paciente não inicia nem finaliza atendimento. | Publicado |
+| VZ-03 | Alta | Funções internas `SECURITY DEFINER`, incluindo reindexação com escrita, tinham EXECUTE para anônimos. Confirmado nos catálogos e advisors publicados. | EXECUTE revogado das funções internas; dados agregados de fila exigem autenticação e vínculo. Privilégios TRUNCATE/REFERENCES/TRIGGER também reduzidos como defesa adicional. | Publicado |
+| VZ-04 | Alta | Faltavam garantias de uma consulta ativa por paciente/dia e um atendimento por clínica. Verificações da interface podiam ser contornadas ou disputar entre si. | Índices únicos parciais garantem ambas as regras, inclusive contra inserções privilegiadas. | Publicado |
+| VZ-05 | Alta | Consulta, entrada/saída da fila e timestamps eram alterados em requisições separadas; falha parcial podia deixar estado inconsistente. | Trigger sincroniza tudo na transação da consulta. Chamar próximo usa RPC transacional com conferência do atendimento esperado. | Publicado |
+| VZ-06 | Alta | Solicitação pública podia trazer `status='Aprovada'`; aprovação administrativa e geração do convite eram independentes. | Policy exige solicitação pendente sem análise; RPC de análise bloqueia a linha e aprova/recusa uma única vez. | Publicado |
+| VZ-07 | Alta | Convite era consumido depois de criar usuário, clínica, endereço e gestor; não havia reserva atômica, expiração nem vinculação ao e-mail aprovado. | Reserva condicional, validade de sete dias, e-mail do responsável e finalização relacional transacional. Concorrência do handler cria só um usuário. Falhas SQL provocam compensação. | Publicado |
+| VZ-08 | Alta | Horários e chaves de dias eram concatenados como HTML na página pública e na visualização da clínica. | Escape dos valores, inclusive chaves inesperadas; teste de HTML armazenado e CSP adicionada. | Publicado |
+| VZ-09 | Alta | A conclusão de recuperação de senha Supabase apenas lançava uma exceção. | Callback validado, tokens removidos da URL, formulário e PUT autenticado para nova senha; sessão de recuperação não dá acesso ao painel. | Publicado |
+| VZ-10 | Média | RPC podia renovar a sessão indefinidamente; renovações concorrentes disputavam tokens; resposta pendente podia restaurar sessão após logout. | Uma repetição por chamada, renovação compartilhada e conferência da sessão antes de gravar o resultado. | Publicado |
+| VZ-11 | Média | Erro de compressão/validação fazia o upload enviar o arquivo original, contornando tipo/tamanho. Bucket publicado não tinha limite nem MIME permitido. | Somente JPG/PNG/WEBP, até 6 MB, sem fallback inseguro; limites também no bucket. | Publicado |
+| VZ-12 | Média | RLS podia impedir PATCH e devolver zero linhas, enquanto a interface anunciava sucesso. | Escritas exigem exatamente uma linha afetada; indisponibilidade de registro vira erro acionável. | Publicado |
+| VZ-13 | Média | Falha na RPC de ocupação caía em leitura parcial escondida por RLS, anunciando horários de outros pacientes como livres. | Disponibilidade falha explicitamente, preservando a garantia dos índices do banco. | Publicado |
+| VZ-14 | Média | Dia era filtrado após baixar o histórico; limites de página da API podiam ocultar consultas recentes e pacientes posteriores ao primeiro lote. | Filtro diário enviado ao servidor, paginação ordenada e IDs de pacientes consultados em lotes menores. | Publicado |
+| VZ-15 | Média | Data/hora dependiam do fuso do navegador, enquanto o banco interpreta a agenda em São Paulo. | Datas, horários, ocupação e virada do dia usam o fuso da clínica. Quatro fusos testados. | Publicado |
+| VZ-16 | Média | Atendimento anterior à meia-noite podia sumir do painel do dia, impedindo chamar o próximo com o atendimento esperado. | Atendimento em andamento continua acessível até finalizar, inclusive após a virada do dia. | Publicado |
+| VZ-17 | Média | Ao passar de clínica ociosa para atendimento iniciado, o botão era recriado e o foco se perdia. | Resumo e ações têm estrutura estável, preservando identidade e foco do botão. Regressão combinada aprovada. | Publicado |
+| VZ-18 | Média | Contraste insuficiente em textos auxiliares, status e dia fechado; erros de formulário sem associação acessível. | Tokens de contraste corrigidos, links textuais sublinhados, erros com `aria-invalid`/`aria-describedby` e envio duplicado bloqueado nos formulários afetados. | Publicado |
+| VZ-19 | Média | Servidor de desenvolvimento escutava toda a rede e podia servir arquivos ocultos/listagens. Hospedagem não tinha CSP/anti-frame. | Servidor usa loopback por padrão, bloqueia arquivos ocultos/listagens e compartilha cabeçalhos com Vercel. | Publicado |
+| VZ-20 | Média | Reagendamento local excluía pelo texto do horário antigo, podendo ignorar o mesmo horário ocupado em outro dia. | Exclusão por ID, validação do dia do paciente e do funcionamento. | Publicado |
+| VZ-21 | Baixa | URI malformada interrompia o roteador; perfil Supabase inexistente virava paciente fictício; credenciais demo apareciam em produção. | Rota inválida recuperável, cadastro incompleto explícito, sessão parcial limpa e caixa demo restrita ao modo local. | Publicado |
+| VZ-22 | Média | Alocação da fila promovia lock da tabela inteira dentro do INSERT; o mesmo padrão concorrente pode provocar deadlock e bloquear clínicas independentes. | Alocação serializada por clínica/dia com advisory lock transacional; funções internas continuam inacessíveis pela API. | Publicado |
 
 O teste do schema anterior conserva reproduções das falhas VZ-01/VZ-02/VZ-03. O schema base permanece em `sql/schema.sql`; a instalação completa exige a migração posterior, conforme `SETUP.md`.
 
@@ -74,7 +74,7 @@ O teste do schema anterior conserva reproduções das falhas VZ-01/VZ-02/VZ-03. 
 
 ## Publicação coordenada
 
-Esta etapa ainda não foi executada. Banco novo: primeiro o schema base; depois os passos abaixo. Banco existente: não recriar tabelas nem executar scripts de tratamento/exclusão de duplicidades sem necessidade.
+Executada em 18/10/2026. A sequência abaixo documenta o procedimento; a migração local foi alinhada à versão registrada pelo Supabase (`20261018163947`). Banco novo: primeiro o schema base. Banco existente: não recriar tabelas nem executar scripts de tratamento/exclusão de duplicidades sem necessidade.
 
 1. Reservar uma janela de manutenção. O frontend antigo escreve diretamente na fila; a migração passa esse trabalho para triggers e revoga a escrita direta. Não deixar as versões misturadas em uso.
 2. Fazer backup e repetir os diagnósticos agregados de duplicidade. Se surgir conflito, revisar os registros com a clínica; a migração aborta sem apagar dados.
@@ -88,7 +88,7 @@ Não reaplicar `sql/policies.sql` ou migrações antigas após esta correção s
 
 ## Limites e riscos remanescentes
 
-- PGlite executa PostgreSQL, roles, RLS, constraints e triggers reais em memória. Os schemas Auth/Storage do teste são mínimos e não substituem o GoTrue, PostgREST, Storage, gateway e permissões de um Supabase completo. Os estados do handler Edge são testados com cliente simulado; não foi feito deploy nem integração real com SMTP.
+- PGlite executa PostgreSQL, roles, RLS, constraints e triggers reais em memória. Os schemas Auth/Storage do teste são mínimos e não substituem o GoTrue, PostgREST, Storage, gateway e permissões de um Supabase completo. Os estados do handler Edge são testados com cliente simulado; o deploy foi realizado posteriormente, sem teste real de SMTP.
 - A configuração histórica exige confirmação de e-mail desativada para cadastro imediato. Com confirmação ativada, a interface agora explica que a confirmação/conclusão é necessária, sem criar sessão fictícia. O provisionamento completo desse modo em outro dispositivo permanece pendente de um fluxo próprio de cadastro confirmado. Avaliar esse requisito antes de habilitar a confirmação.
 - Proteção contra senhas vazadas e limites/CAPTCHA contra abuso do formulário público dependem de configuração/serviço. O formulário possui validação e trava de envio, que não substituem limitação no servidor.
 - Não houve teste de carga distribuída ou múltiplas conexões PostgreSQL reais. Os índices e transações foram exercitados; concorrência de resgate do convite e renovação de sessão foi simulada. Não se afirma capacidade máxima ou ausência de deadlocks sob carga.
