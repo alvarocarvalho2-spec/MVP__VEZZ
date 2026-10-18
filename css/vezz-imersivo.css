@@ -123,7 +123,6 @@ main :where(h1,h2,h3,h4,p,.chip,.kv strong) { overflow-wrap: anywhere; }
 .hero-stage.is-presented .demo-chip { animation: enter 600ms var(--ease) 390ms both; }
 .hero-stage.is-presented .demo-bot { animation: enter 650ms var(--ease) 540ms both; }
 .hero-stage.is-presented .demo-bot .bot { animation-delay: 1200ms; }
-.demo-label { position: absolute; bottom: -18px; left: 0; font-size: 10px; letter-spacing: .02em; color: #b0c3e2; }
 .hero-immersive .stats { margin-top: var(--space-8); background: #a9c3f529; border: 1px solid #a9c3f529; box-shadow: none; border-radius: 16px; }
 .hero-immersive .stat { background: #071e4b9c; padding: 20px 24px; }
 .hero-immersive .stat b { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 23px; font-weight: 600; }
@@ -162,7 +161,6 @@ main :where(h1,h2,h3,h4,p,.chip,.kv strong) { overflow-wrap: anywhere; }
 .jornada-inner { width: min(1120px,calc(100% - 72px)); margin: auto; }
 .j-intro { display: flex; justify-content: space-between; gap: var(--space-3); align-items: end; margin-bottom: 28px; }
 .j-intro h2 { color: #fff; font-size: clamp(27px,3vw,38px); margin-bottom: 0; }
-.j-intro > span { color: #b7c9e6; font-size: 11px; }
 .j-nav { display: none; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
 .j-nav button { text-align: left; border: 0; background: transparent; border-radius: 6px; color: #afc1df; font-size: 12px; padding: 10px 4px; cursor: pointer; transition: color var(--motion-micro); }
 .j-nav button span { margin-left: 10px; }
@@ -347,7 +345,6 @@ table.data tbody tr:hover { background: #f4f7fd; }
   .demo-bot { width: 112px; bottom: 12px; right: 0; }
   .chip-a { top: 0; left: 0; }
   .chip-b { display: none; }
-  .demo-label { bottom: -22px; }
   .hero-immersive .stats { margin-top: 48px; }
   .clinic-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .clinic-editorial[data-items="4"] { grid-template-rows: auto; }
@@ -391,7 +388,6 @@ table.data tbody tr:hover { background: #f4f7fd; }
   .demo-rows li { padding: 9px 7px; }
   .demo-bot { width: 100px; bottom: 0; right: 0; }
   .chip-a { top: 0; left: 0; font-size: 10px; padding: 7px 11px; }
-  .demo-label { bottom: -20px; font-size: 9px; }
   .demo-ticket { font-size: 32px; }
   .demo-clinic { font-size: 9px; }
   .demo-pos b { font-size: 32px; }
@@ -408,7 +404,6 @@ table.data tbody tr:hover { background: #f4f7fd; }
   .jornada-stage { border-radius: 22px; padding: 32px 0; }
   .jornada-inner { width: calc(100% - 36px); }
   .j-intro { display: block; }
-  .j-intro > span { display: block; margin-top: 12px; }
   .j-step { grid-template-columns: 1fr; gap: var(--space-2); padding: 32px 0; }
   .j-step h3 { max-width: 24ch; }
   .j-step p { font-size: 15px; }

@@ -75,10 +75,10 @@ export async function renderHome(root, { session }) {
             </div>
             <p class="muted" style="margin-top:14px;font-size:13px;color:#b0c3e2">Encontre seu próximo cuidado · pesquise sem cadastro</p>
           </div>
-          <div class="hero-stage" id="heroStage" aria-label="Demonstração da fila do VEZZ">
+          <div class="hero-stage" id="heroStage" aria-label="Acompanhamento da fila do VEZZ">
             <div class="stage-glow" aria-hidden="true"></div>
             <div class="demo-card demo-main" data-depth="0.5">
-              <div class="demo-head"><span class="badge live">ao vivo</span><span class="demo-clinic">Clínica Demo</span></div>
+              <div class="demo-head"><span class="badge live">ao vivo</span><span class="demo-clinic">Sua clínica</span></div>
               <div class="demo-ticket" id="demoTicket">A-042</div>
               <div class="demo-pos">
                 <span class="demo-pos-label" id="demoPosLabel">Sua posição</span>
@@ -94,7 +94,6 @@ export async function renderHome(root, { session }) {
             <div class="demo-chip chip-a" data-depth="1.3"><span class="pulse-dot"></span> Seu tempo importa</div>
             <div class="demo-chip chip-b" data-depth="1.1"><b>✓</b> Acompanhe cada etapa</div>
             <span class="demo-bot" id="heroBot" data-depth="0.7">${bot("calm", "bot-glow bot-float")}</span>
-            <span class="demo-label">Demonstração — dados ilustrativos, sem clínica real</span>
           </div>
         </div>
         <div class="wrap">
@@ -124,7 +123,7 @@ export async function renderHome(root, { session }) {
       <section class="jornada" id="jornada" aria-label="A jornada do atendimento no VEZZ">
         <div class="jornada-stage">
           <div class="jornada-inner">
-            <div class="j-intro"><div><div class="kicker">Do agendamento ao atendimento</div><h2>Com você, em cada etapa.</h2></div><span>Demonstração ilustrativa</span></div>
+            <div class="j-intro"><div><div class="kicker">Do agendamento ao atendimento</div><h2>Com você, em cada etapa.</h2></div></div>
             <nav class="j-nav" aria-label="Etapas do atendimento"><button type="button" aria-current="step">01 <span>Agende</span></button><button type="button">02 <span>Entre na fila</span></button><button type="button">03 <span>Acompanhe</span></button><button type="button">04 <span>Sua vez</span></button></nav>
             <div class="jornada-rail" aria-hidden="true"><i id="jornadaFill"></i></div>
             <div class="jornada-steps">
@@ -137,7 +136,7 @@ export async function renderHome(root, { session }) {
                 <div class="j-visual">
                   <span class="j-bot">${bot("thinking", "bot-glow bot-float")}</span>
                   <div class="j-mock">
-                    <div class="j-mock-head">Horários livres · Clínica Demo</div>
+                    <div class="j-mock-head">Horários livres · Sua clínica</div>
                     <div class="slots"><span class="slot">08:00</span><span class="slot">08:30</span><span class="slot is-busy">09:00</span><span class="slot">09:30</span></div>
                   </div>
                 </div>
@@ -153,7 +152,7 @@ export async function renderHome(root, { session }) {
                   <div class="j-mock">
                     <div class="j-mock-head">Sua senha</div>
                     <div class="j-mock-ticket">A-042</div>
-                    <div class="j-mock-row"><span>Clínica Demo · hoje</span><b>Posição 2</b></div>
+                    <div class="j-mock-row"><span>Sua clínica · hoje</span><b>Posição 2</b></div>
                   </div>
                 </div>
               </article>
@@ -183,7 +182,7 @@ export async function renderHome(root, { session }) {
                   <span class="j-bot">${bot("joy", "bot-glow bot-float")}</span>
                   <div class="j-mock j-mock-you">
                     <b>É a sua vez!</b>
-                    <span>Dirija-se à sala 2 · Clínica Demo</span>
+                    <span>Dirija-se à sala 2 · Sua clínica</span>
                   </div>
                 </div>
               </article>
