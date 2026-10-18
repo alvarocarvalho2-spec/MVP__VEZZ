@@ -12,11 +12,11 @@ import {
   bindSlotPicker,
   bot,
   bottomNav,
+  confirmDialog,
   emptyState,
   footer,
   header,
   modal,
-  renderSlotButtons,
   ticketCard,
   toast,
 } from "../lib/ui.js";
@@ -180,14 +180,17 @@ export async function renderPatientHome(root, { session }) {
     `);
 
     bindEvent(root.querySelector("[data-cancel]"), "click", async (e) => {
-      if (!confirm("Cancelar esta consulta?")) return;
+      const button = e.currentTarget;
+      const id = button.dataset.cancel;
+      if (!await confirmCancellation(next)) return;
+      button.disabled = true;
       try {
-        await db().cancelAppointment(e.currentTarget.dataset.cancel);
+        await db().cancelAppointment(id);
         toast("Consulta cancelada.", "ok");
-        paint();
+        await paint();
       } catch (err) {
         toast(err.message, "danger");
-      }
+      } finally { button.disabled = false; }
     });
     bindEvent(root.querySelector("[data-reschedule]"), "click", (e) => {
       openReschedule(e.currentTarget.dataset.reschedule, paint);
@@ -287,12 +290,15 @@ export async function renderHistory(root, { session }) {
 
   root.querySelectorAll("[data-cancel]").forEach((b) =>
     bindEvent(b, "click", async () => {
-      if (!confirm("Cancelar esta consulta?")) return;
+      const id = b.dataset.cancel;
+      if (!await confirmCancellation(list.find(appointment => appointment.id_consulta === id))) return;
+      b.disabled = true;
       try {
         await db().cancelAppointment(b.dataset.cancel);
         toast("Consulta cancelada.", "ok");
         await renderHistory(root, { session });
       } catch (err) { toast(err.message, "danger"); }
+      finally { b.disabled = false; }
     })
   );
   root.querySelectorAll("[data-reschedule]").forEach((b) =>
@@ -300,9 +306,21 @@ export async function renderHistory(root, { session }) {
   );
 }
 
+function confirmCancellation(appointment) {
+  return confirmDialog({
+    title: "Cancelar esta consulta?",
+    body: `<p>O horário ficará disponível para outra pessoa. Confira os detalhes antes de continuar.</p>
+      <dl class="confirmation-summary"><div><dt>Clínica</dt><dd>${escapeHtml(appointment?.clinica?.nome || "")}</dd></div>
+        <div><dt>Quando</dt><dd>${escapeHtml(formatDateTime(appointment?.data_hora))}</dd></div>
+        <div><dt>Especialidade</dt><dd>${escapeHtml(appointment?.especialidade || "Clínica Geral")}</dd></div></dl>`,
+    confirmLabel: "Cancelar consulta", cancelLabel: "Manter consulta",
+  });
+}
+
 async function openReschedule(id, onDone) {
+  const route = location.hash;
   const ap = await db().getAppointment(id);
-  if (!ap) return;
+  if (!ap || location.hash !== route) return;
   const m = modal({
     title: "Reagendar consulta",
     body: `
@@ -315,8 +333,11 @@ async function openReschedule(id, onDone) {
   const slotsBox = m.el.querySelector("#rs-slots");
   const dateInput = m.el.querySelector("[name=data]");
   const hidden = m.el.querySelector("[name=horario]");
+  const picker = bindSlotPicker(slotsBox, hidden);
+  const confirm = m.el.querySelector("#rs-ok");
+  let request = 0, submitting = false;
   const load = async () => {
-    hidden.value = "";
+    const version = ++request;
     const d = dateInput.value;
     if (!d) {
       slotsBox.innerHTML = `<p class="muted">Escolha uma data.</p>`;
@@ -326,11 +347,14 @@ async function openReschedule(id, onDone) {
       slotsBox.innerHTML = `<p class="muted">Essa data já passou. Escolha hoje ou um dia futuro.</p>`;
       return;
     }
-    if (await db().hasAppointmentOnDay(ap.id_paciente, d, ap.id_consulta)) {
+    const clash = await db().hasAppointmentOnDay(ap.id_paciente, d, ap.id_consulta);
+    if (version !== request || !m.el.isConnected) return;
+    if (clash) {
       slotsBox.innerHTML = `<p class="muted">Você já possui outra consulta neste dia.</p>`;
       return;
     }
     const slots = await db().availableSlots(ap.id_clinica, d, { excludeId: ap.id_consulta });
+    if (version !== request || !m.el.isConnected) return;
     if (!slots.length) {
       slotsBox.innerHTML = `<p class="muted">A clínica não atende neste dia.</p>`;
       return;
@@ -339,20 +363,34 @@ async function openReschedule(id, onDone) {
       slotsBox.innerHTML = `<p class="muted">Não há horários livres neste dia.</p>`;
       return;
     }
-    slotsBox.innerHTML = renderSlotButtons(slots);
+    picker.render(slots);
   };
-  await load();
-  dateInput.addEventListener("change", load);
-  bindSlotPicker(slotsBox, hidden);
-  m.el.querySelector("#rs-ok").addEventListener("click", async () => {
-    if (!hidden.value) return toast("Escolha um horário.", "warn");
+  const refresh = async () => {
+    const version = request + 1;
+    picker.clear(); slotsBox.innerHTML = `<p class="muted" role="status">Consultando horários…</p>`;
+    confirm.disabled = true;
+    try { await load(); }
+    catch (error) { toast(error.message, "danger"); }
+    finally { if (version === request && !submitting) confirm.disabled = false; }
+  };
+  await refresh();
+  dateInput.addEventListener("change", refresh);
+  confirm.addEventListener("click", async () => {
+    if (submitting) return;
+    if (!hidden.value) {
+      toast("Escolha um dos horários disponíveis para reagendar sua consulta.", "warn");
+      (slotsBox.querySelector("button.slot") || dateInput).focus(); return;
+    }
+    submitting = true; confirm.disabled = true; confirm.textContent = "Confirmando…";
     try {
       await db().rescheduleAppointment(id, dateInput.value, hidden.value);
+      await m.close();
       toast("Consulta reagendada.", "ok");
-      m.close();
-      onDone?.();
+      await onDone?.();
     } catch (err) {
       toast(err.message, "danger");
+    } finally {
+      submitting = false; confirm.disabled = false; confirm.textContent = "Confirmar";
     }
   });
 }

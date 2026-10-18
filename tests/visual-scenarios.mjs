@@ -42,21 +42,21 @@ export async function verify({ cdp, evaluate, screenshot, delay, output }) {
     check('navigation focuses heading', await evaluate(`document.activeElement === document.querySelector('main h1')`));
     await route('#/');
     const initialPos = await evaluate(`document.querySelector('#demoPos').textContent`);
-    await delay(3400);
+    await delay(4500);
     check('queue demo advances', initialPos !== await evaluate(`document.querySelector('#demoPos').textContent`));
     const box = await evaluate(`(()=>{const r=document.querySelector('#heroStage').getBoundingClientRect();return {x:r.x+30,y:r.y+30}})()`);
     await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
     await delay(150);
     check('parallax applies to stage', await evaluate(`document.querySelector('.demo-main').style.translate.includes('px')`));
     for (let i = 0; i < 4; i++) {
-      await evaluate(`(()=>{const s=document.querySelector('#jornada'),r=s.getBoundingClientRect();scrollTo({top:scrollY+r.top-72+(s.offsetHeight-innerHeight+72)*(${i}+.2)/4,behavior:'instant'})})()`);
-      await delay(700);
+      await evaluate(`document.querySelectorAll('.j-nav button')[${i}].click()`);
+      await delay(1100);
       check(`journey step ${i + 1}`, await evaluate(`document.querySelectorAll('.j-step')[${i}].classList.contains('is-active') && !document.querySelectorAll('.j-step')[${i}].inert`));
       await screenshot(`journey-${i + 1}`);
     }
     check('ambient pauses outside viewport', await evaluate(`document.querySelector('#heroStage').classList.contains('motion-paused')`));
     const pausedPos = await evaluate(`document.querySelector('#demoPos').textContent`);
-    await delay(3400);
+    await delay(4500);
     check('demo timer pauses outside viewport', pausedPos === await evaluate(`document.querySelector('#demoPos').textContent`));
     await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await delay(200);

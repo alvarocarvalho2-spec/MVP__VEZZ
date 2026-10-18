@@ -247,12 +247,21 @@ export function renderSlotButtons(slots) {
         const why = s.reason === "passado" ? "Horário já passou" : "Horário ocupado";
         return `<span class="slot is-busy" title="${why}" aria-disabled="true">${escapeHtml(s.time)}</span>`;
       }
-      return `<button type="button" class="slot" data-time="${escapeHtml(s.time)}">${escapeHtml(s.time)}</button>`;
+      return `<button type="button" class="slot" data-time="${escapeHtml(s.time)}" aria-pressed="false">${escapeHtml(s.time)}</button>`;
     })
     .join("");
 }
 
 export function bindSlotPicker(box, hidden) {
+  const select = value => {
+    hidden.value = value;
+    box.querySelectorAll("button.slot").forEach(button => {
+      const selected = Boolean(value) && button.dataset.time === value;
+      button.classList.toggle("is-on", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+  };
   box.addEventListener("click", (e) => {
     const busy = e.target.closest(".slot.is-busy");
     if (busy) {
@@ -261,10 +270,19 @@ export function bindSlotPicker(box, hidden) {
     }
     const btn = e.target.closest("button.slot");
     if (!btn || btn.disabled) return;
-    box.querySelectorAll(".slot.is-on").forEach((b) => b.classList.remove("is-on"));
-    btn.classList.add("is-on");
-    hidden.value = btn.dataset.time || "";
+    select(btn.dataset.time || "");
   });
+  return {
+    clear: () => select(""),
+    render: slots => {
+      // Read at response time: a person may select while availability is loading.
+      const selected = hidden.value;
+      const available = slots.some(slot => slot.time === selected && !slot.taken);
+      updateLiveView(box, renderSlotButtons(slots));
+      select(available ? selected : "");
+      return Boolean(selected) && !available;
+    },
+  };
 }
 
 export function badge(status) {
@@ -272,34 +290,102 @@ export function badge(status) {
 }
 
 export function toast(message, type = "") {
-  const host = document.getElementById("toasts");
+  const host = activeModal?.el.querySelector(".modal-notices") || document.getElementById("toasts");
   if (!host) return;
-  const node = el(`<div class="toast ${type}" role="status">${escapeHtml(message)}</div>`);
-  host.appendChild(node);
-  setTimeout(() => {
+  const tones = {
+    ok: { title: "Tudo certo", expression: "joy" },
+    warn: { title: "Antes de continuar", expression: "thinking" },
+    danger: { title: "Não foi possível concluir", expression: "worried" },
+  };
+  const tone = tones[type] || { title: "Um aviso para você", expression: "calm" };
+  const node = el(`<div class="toast ${tones[type] ? type : "info"}" role="${type === "danger" ? "alert" : "status"}" aria-atomic="true">
+    <span class="toast-mascot" aria-hidden="true">${bot(tone.expression)}</span>
+    <div class="toast-content"><span class="feedback-brand">VEZZ</span><strong>${tone.title}</strong><p>${escapeHtml(message)}</p></div>
+    <button type="button" class="toast-close icon-btn" aria-label="Dispensar aviso">${icon("close")}</button>
+  </div>`);
+  let timer, exitTimer, remaining = type === "danger" ? 9000 : 6500, started = 0, closing = false, paused = true;
+  const close = () => {
+    if (closing) return;
+    closing = true; clearTimeout(timer);
     node.classList.add("out");
-    setTimeout(() => node.remove(), 240);
-  }, 3800);
+    exitTimer = setTimeout(() => node.remove(), matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200);
+  };
+  const pause = () => {
+    if (paused || closing) return;
+    paused = true; clearTimeout(timer); remaining = Math.max(0, remaining - (performance.now() - started));
+  };
+  const resume = () => {
+    if (closing || node.matches(":hover, :focus-within")) return;
+    clearTimeout(timer); paused = false; started = performance.now(); timer = setTimeout(close, remaining);
+  };
+  node.querySelector("button").addEventListener("click", close);
+  node.addEventListener("pointerenter", pause); node.addEventListener("pointerleave", resume);
+  node.addEventListener("focusin", pause); node.addEventListener("focusout", () => queueMicrotask(resume));
+  // Keep small screens readable; notices removed early also release their timers.
+  const limit = matchMedia("(max-width: 680px)").matches ? 1 : 3;
+  while (host.children.length >= limit) host.firstElementChild?.dispatchEvent(new Event("dismiss"));
+  node.addEventListener("dismiss", () => { clearTimeout(timer); clearTimeout(exitTimer); closing = true; node.remove(); });
+  host.appendChild(node);
+  resume();
+  return close;
 }
 
-export function modal({ title, body, actions = "" }) {
+let activeModal = null;
+let modalId = 0;
+export function closeModal() { activeModal?.close("navigation", true); }
+
+export function modal({ title, body, actions = "", expression = "calm", onClose }) {
+  activeModal?.close("replaced", true);
+  // Old feedback must not cover a new decision, especially on a phone.
+  document.querySelectorAll("#toasts .toast").forEach(node => node.dispatchEvent(new Event("dismiss")));
   const previousFocus = document.activeElement;
+  const id = `vezz-modal-${++modalId}`;
   const back = el(`
-    <div class="modal-back" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-back" role="dialog" aria-modal="true" aria-labelledby="${id}" tabindex="-1">
       <div class="modal">
-        <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
-          <h3 id="modal-title">${escapeHtml(title)}</h3>
-          <button class="icon-btn" data-close aria-label="Fechar janela">${icon("close")}</button>
+        <div class="modal-brand-bar">
+          <span class="modal-brand"><span aria-hidden="true">${bot(expression)}</span><span class="feedback-brand">VEZZ</span></span>
+          <button type="button" class="icon-btn" data-close aria-label="Fechar janela">${icon("close")}</button>
         </div>
-        <div class="modal-body">${body}</div>
-        <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">${actions}</div>
+        <div class="modal-content"><h2 id="${id}">${escapeHtml(title)}</h2>
+          <div class="modal-body">${body}</div>
+          <div class="modal-notices" aria-live="polite" aria-relevant="additions"></div>
+          <div class="modal-actions">${actions}</div>
+        </div>
       </div>
     </div>`);
-  const close = () => { back.remove(); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); };
+  const app = document.getElementById("app"), previousInert = app?.inert;
+  const previousOverflow = document.body.style.overflow;
+  const previousGutter = document.documentElement.style.scrollbarGutter;
+  let closing = false, finished = false, closeTimer, finishClose;
+  const closed = new Promise(resolve => { finishClose = resolve; });
+  const finish = reason => {
+    if (finished) return;
+    finished = true;
+    back.querySelectorAll(".toast").forEach(node => node.dispatchEvent(new Event("dismiss")));
+    clearTimeout(closeTimer); back.remove();
+    if (app) app.inert = previousInert;
+    document.body.style.overflow = previousOverflow;
+    document.documentElement.style.scrollbarGutter = previousGutter;
+    if (activeModal?.el === back) activeModal = null;
+    if (previousFocus?.isConnected && !previousFocus.closest("[inert]")) previousFocus.focus({ preventScroll: true });
+    else document.querySelector("main h1")?.focus({ preventScroll: true });
+    onClose?.(reason); finishClose();
+  };
+  const close = (reason = "dismiss", immediate = false) => {
+    if (closing) { if (immediate && back.isConnected) finish(reason); return closed; }
+    closing = true; back.classList.add("is-closing");
+    if (immediate || matchMedia("(prefers-reduced-motion: reduce)").matches) finish(reason);
+    else closeTimer = setTimeout(() => finish(reason), 180);
+    return closed;
+  };
   back.addEventListener("click", (e) => {
     if (e.target === back || e.target.closest("[data-close]")) close();
   });
   document.body.appendChild(back);
+  if (app) app.inert = true;
+  if (innerWidth > document.documentElement.clientWidth) document.documentElement.style.scrollbarGutter = "stable";
+  document.body.style.overflow = "hidden";
   back.addEventListener("keydown", e => {
     if (e.key === "Escape") { e.preventDefault(); close(); }
     if (e.key !== "Tab") return;
@@ -308,8 +394,20 @@ export function modal({ title, body, actions = "" }) {
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
   });
-  back.querySelector("input:not([type=hidden]), button")?.focus();
-  return { el: back, close };
+  (back.querySelector("[data-modal-autofocus]") || back.querySelector(".modal-body input:not([type=hidden]), .modal-body select") || back.querySelector("button"))?.focus();
+  activeModal = { el: back, close };
+  return activeModal;
+}
+
+export function confirmDialog({ title, body, confirmLabel = "Confirmar", cancelLabel = "Voltar", expression = "thinking" }) {
+  return new Promise(resolve => {
+    const dialog = modal({
+      title, body, expression,
+      actions: `<button type="button" class="btn btn-ghost" data-close data-modal-autofocus>${escapeHtml(cancelLabel)}</button><button type="button" class="btn btn-danger" data-confirm>${escapeHtml(confirmLabel)}</button>`,
+      onClose: reason => resolve(reason === "confirm"),
+    });
+    dialog.el.querySelector("[data-confirm]").addEventListener("click", () => dialog.close("confirm"), { once: true });
+  });
 }
 
 export function field({ name, label, type = "text", value = "", placeholder = "", hint = "", required = false, autocomplete = "", min = "", max = "" }) {

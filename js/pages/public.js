@@ -14,9 +14,7 @@ import {
   field,
   footer,
   header,
-  renderSlotButtons,
   toast,
-  updateLiveView,
   groupForm,
 } from "../lib/ui.js";
 import {
@@ -109,7 +107,7 @@ export async function renderHome(root, { session }) {
 
       <section class="section" id="clinicas-home">
         <div class="wrap">
-          <div class="section-head reveal">
+          <div class="section-head reveal" data-reveal="heading">
             <div>
               <div class="kicker">Encontre seu cuidado</div>
               <h2>O próximo passo começa aqui.</h2>
@@ -194,7 +192,7 @@ export async function renderHome(root, { session }) {
 
       <section class="section">
         <div class="wrap split">
-          <article class="card reveal">
+          <article class="card reveal" data-reveal="scene">
             <div>
               <span class="split-bot">${bot("calm", "bot-glow")}</span>
               <div class="kicker">Pacientes</div>
@@ -203,7 +201,7 @@ export async function renderHome(root, { session }) {
             </div>
             <a class="btn" href="#/cadastro">Criar conta de paciente</a>
           </article>
-          <article class="card dark reveal" style="--d:.08s">
+          <article class="card dark reveal" data-reveal="scene" style="--d:.08s">
             <div>
               <span class="split-bot">${bot("cool", "bot-glow")}</span>
               <div class="kicker" style="color:#a9c3f5">Gestores</div>
@@ -217,7 +215,7 @@ export async function renderHome(root, { session }) {
 
       <section class="section" style="padding-bottom:clamp(40px,6vw,64px)">
         <div class="wrap">
-          <div class="cta-card reveal">
+          <div class="cta-card reveal" data-reveal="scene">
             <span class="cta-bot">${bot("joy", "bot-glow bot-float")}</span>
             <div>
               <div class="kicker">Comece hoje</div>
@@ -397,11 +395,12 @@ export async function renderSchedule(root, { session, params }) {
               </div>
             </div>
             <div class="field">
-              <label>Horários disponíveis</label>
-              <div class="slots" id="slots"></div>
+              <span id="slots-label">Horários disponíveis</span>
+              <div class="slots" id="slots" role="group" aria-labelledby="slots-label" aria-describedby="slot-feedback slot-error"></div>
               <input type="hidden" name="horario" required>
+              <p class="slot-feedback" id="slot-feedback" aria-live="polite">Escolha um horário para continuar.</p>
               <div class="slots-legend"><span>Riscado = ocupado ou já passou</span></div>
-              <div class="field-error" data-error-for="horario" hidden></div>
+              <div class="field-error" id="slot-error" data-error-for="horario" hidden></div>
             </div>
             ${field({ name: "observacao", label: "Observação (opcional)", placeholder: "Motivo da visita, convênio…" })}
             <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -424,8 +423,18 @@ export async function renderSchedule(root, { session, params }) {
   const form = root.querySelector("#book");
   const slotsBox = root.querySelector("#slots");
   const hidden = form.querySelector("[name=horario]");
+  const picker = bindSlotPicker(slotsBox, hidden);
+  const feedback = form.querySelector("#slot-feedback");
+  const slotError = form.querySelector("#slot-error");
+  const submit = form.querySelector("button[type=submit]");
+  const dateInput = form.elements.namedItem("data");
+  let submitting = false;
   let slotsStamp = "";
   let slotRequest = 0;
+  hidden.addEventListener("change", () => {
+    feedback.textContent = hidden.value ? `Horário selecionado: ${hidden.value}.` : "Escolha um horário para continuar.";
+    slotError.hidden = true; slotsBox.removeAttribute("aria-invalid");
+  });
 
   // Atualiza a grade consultando o banco de novo. Só re-renderiza quando a
   // disponibilidade muda (sem piscar), preservando o horário selecionado —
@@ -433,76 +442,76 @@ export async function renderSchedule(root, { session, params }) {
   async function paintSlots() {
     const request = ++slotRequest;
     const d = form.data.value;
-    const keep = hidden.value;
     if (!d) {
-      hidden.value = "";
+      picker.clear();
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Escolha uma data.</p>`;
       return;
     }
     if (isPastDay(d)) {
-      hidden.value = "";
+      picker.clear();
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Essa data já passou. Escolha hoje ou um dia futuro.</p>`;
       return;
     }
     const clash = await db().hasAppointmentOnDay(session.id, d);
-    if (request !== slotRequest || !root.isConnected) return;
+    if (request !== slotRequest || d !== dateInput.value || !root.isConnected) return;
     if (clash) {
-      hidden.value = "";
+      picker.clear();
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Você já possui uma consulta neste dia. Cancele ou reagende a existente antes de marcar outra.</p>`;
       return;
     }
     const slots = await db().availableSlots(c.id_clinica, d);
-    if (request !== slotRequest || !root.isConnected) return;
+    if (request !== slotRequest || d !== dateInput.value || !root.isConnected) return;
     const free = slots.filter((s) => !s.taken);
     if (!slots.length) {
-      hidden.value = "";
+      picker.clear();
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">A clínica não atende neste dia.</p>`;
       return;
     }
     if (!free.length) {
-      hidden.value = "";
+      const hadSelection = Boolean(hidden.value);
+      picker.clear();
       slotsStamp = "";
       slotsBox.innerHTML = `<p class="muted">Não há horários livres neste dia.</p>`;
+      if (hadSelection) toast("Os horários deste dia acabaram de ser ocupados. Escolha outra data.", "warn");
       return;
     }
     const stamp = d + JSON.stringify(slots.map((s) => `${s.time}:${s.taken ? 1 : 0}`));
     if (stamp === slotsStamp) return; // nada mudou: mantém seleção e foco
     slotsStamp = stamp;
-    hidden.value = "";
-    updateLiveView(slotsBox, renderSlotButtons(slots));
-    if (keep) {
-      const sel = slots.find((s) => s.time === keep);
-      if (sel && !sel.taken) {
-        hidden.value = keep;
-        slotsBox.querySelector(`button.slot[data-time="${keep}"]`)?.classList.add("is-on");
-      } else {
-        toast("O horário selecionado acabou de ser ocupado. Escolha outro.", "warn");
-      }
-    }
+    if (picker.render(slots)) toast("O horário selecionado acabou de ser ocupado. Escolha outro.", "warn");
   }
 
   stopScheduleLive();
   await paintSlots();
   if (!root.isConnected) return;
-  form.data.addEventListener("change", paintSlots);
-  bindSlotPicker(slotsBox, hidden);
+  dateInput.addEventListener("change", () => {
+    picker.clear(); slotsStamp = "";
+    slotsBox.innerHTML = `<p class="muted" role="status">Consultando horários…</p>`;
+    paintSlots().catch(error => toast(error.message, "danger"));
+  });
   // Disponibilidade ao vivo: a grade se atualiza sozinha enquanto a tela está aberta
   schedulePoll = setInterval(() => paintSlots().catch(error => console.error("Disponibilidade:", error)), SCHEDULE_POLL_MS);
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (isPastDay(form.data.value)) {
       toast("Essa data já passou.", "warn");
       return;
     }
     if (!hidden.value) {
-      toast("Selecione um horário.", "warn");
+      slotError.textContent = "Escolha um dos horários disponíveis antes de confirmar.";
+      slotError.hidden = false; slotsBox.setAttribute("aria-invalid", "true");
+      toast(slotError.textContent, "warn");
+      (slotsBox.querySelector("button.slot") || dateInput).focus();
       return;
     }
+    submitting = true; submit.disabled = true; submit.textContent = "Confirmando…";
+    form.setAttribute("aria-busy", "true");
     try {
       const created = await db().bookAppointment({
         id_paciente: session.id,
@@ -516,7 +525,10 @@ export async function renderSchedule(root, { session, params }) {
       location.hash = `#/paciente?nova=${created.id_consulta}`;
     } catch (err) {
       toast(err.message, "danger");
-      paintSlots(); // a grade pode ter mudado (ex.: horário ocupado por outro paciente)
+      paintSlots().catch(error => console.error("Disponibilidade:", error));
+    } finally {
+      submitting = false; submit.disabled = false; submit.textContent = "Confirmar agendamento";
+      form.removeAttribute("aria-busy");
     }
   });
   bindMasks(root);

@@ -101,7 +101,7 @@ try {
       check(`home ${i+1} owns one demo timer`,await evaluate(`__qaTimers.size===1`));
       await evaluate(`location.hash='#/como-funciona'`);await delay(850);
       check(`route ${i+1} removes demo timer`,await evaluate(`__qaTimers.size===0`));
-      check(`route ${i+1} removes journey listeners`,await command(`(getEventListeners(window).scroll||[]).length===1 && (getEventListeners(window).resize||[]).length===0`));
+      check(`route ${i+1} keeps only current view and header listeners`,await command(`(getEventListeners(window).scroll||[]).length===1 && (getEventListeners(window).resize||[]).length===1`));
       check(`route ${i+1} removes pointer listeners`,await command(`(getEventListeners(window.__oldStage).pointermove||[]).length===0`));
       check(`route ${i+1} releases detached observer targets`,await evaluate(`[...__qaObservers].every(o=>[...o.targets].every(t=>t.isConnected))`));
     }

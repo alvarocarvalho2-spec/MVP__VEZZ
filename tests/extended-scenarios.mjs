@@ -80,6 +80,7 @@ export async function verify({ cdp, evaluate, screenshot, delay, output }) {
     await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
     check('modal traps keyboard focus', await evaluate(`document.activeElement.matches('[data-close]')`));
     await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+    await waitFor(`!document.querySelector('[role=dialog]')`);
     check('closing modal restores action focus', await evaluate(`!document.querySelector('[role=dialog]') && document.activeElement===window.__rescheduleButton`));
     await evaluate(`window.__rescheduleButton.click()`);
     await delay(200);
@@ -91,7 +92,10 @@ export async function verify({ cdp, evaluate, screenshot, delay, output }) {
     await delay(200);
     check('reschedule refreshes history in place and retains focus', await evaluate(`document.querySelector('[data-reschedule="${id}"]')===window.__rescheduleButton && document.activeElement===window.__rescheduleButton && window.__rescheduleButton.closest('tr').textContent.includes((await import('/js/lib/utils.js')).formatDateTime((await api.getAppointment(${JSON.stringify(id)})).data_hora))`));
     await route('#/paciente'); await route('#/paciente/historico');
-    await evaluate(`window.confirm=()=>true;document.querySelector('[data-cancel="${id}"]').click()`);
+    await evaluate(`document.querySelector('[data-cancel="${id}"]').click()`);
+    await waitFor(`!!document.querySelector('[data-confirm]')`);
+    check('cancellation uses VEZZ dialog with safe initial focus', await evaluate(`document.querySelector('[role=dialog] .feedback-brand').textContent==='VEZZ' && document.activeElement.textContent==='Manter consulta'`));
+    await evaluate(`document.querySelector('[data-confirm]').click()`);
     await delay(400);
     check('cancel removes pending actions and records status', await evaluate(`(await api.getAppointment(${JSON.stringify(id)})).status==='Cancelada' && !document.querySelector('[data-cancel="${id}"]')`));
     for (const value of [360,390,768,1024,1440]) {

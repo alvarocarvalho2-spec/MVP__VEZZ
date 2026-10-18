@@ -6,7 +6,7 @@ import { initDb, db } from "./lib/db.js";
 import { initMotion, initReveal, stopMotion } from "./lib/motion.js";
 import { injectBotSprite } from "./lib/bot-sprite.js";
 import { match, startRouter } from "./lib/router.js";
-import { bot, toast } from "./lib/ui.js";
+import { bot, closeModal, toast } from "./lib/ui.js";
 import { escapeHtml } from "./lib/utils.js";
 import { renderHome, renderHow, renderClinics, renderClinic, renderSchedule, renderClinicRequest, stopScheduleLive, stopHeroDemo } from "./pages/public.js";
 import { renderAdmin, renderInvite } from "./pages/admin.js";
@@ -76,6 +76,7 @@ async function renderNotFound(view) {
 let navigation = 0;
 async function onRoute(route) {
   const current = ++navigation;
+  closeModal();
   stopPatientLive();
   stopManagerLive();
   stopScheduleLive();
