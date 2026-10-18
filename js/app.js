@@ -106,7 +106,7 @@ async function onRoute(route) {
   }
   if (found?.role && session.role !== found.role) {
     toast("Esta área é restrita ao perfil correto.", "warn");
-    location.hash = session.role === "gestor" ? "#/gestor" : "#/paciente";
+    location.hash = session.role === "admin" ? "#/admin-vezz" : session.role === "gestor" ? "#/gestor" : "#/paciente";
     return;
   }
   if (found?.principalOnly && session?.role === "gestor" && !session?.principal) {
@@ -208,5 +208,5 @@ initDb()
   })
   .catch((err) => {
     console.error(err);
-    root.innerHTML = `<main class="page"><div class="wrap card card-pad"><h1>Falha ao iniciar</h1><p>${(err && err.message) || err}</p><p class="muted">Tente recarregar. Se persistir, limpe os dados locais do navegador e tente novamente.</p></div></main>`;
+    root.innerHTML = `<main class="page"><div class="wrap card card-pad"><h1>Falha ao iniciar</h1><p>${escapeHtml((err && err.message) || err)}</p><p class="muted">Tente recarregar. Se persistir, limpe os dados locais do navegador e tente novamente.</p></div></main>`;
   });

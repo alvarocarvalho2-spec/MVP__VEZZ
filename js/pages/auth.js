@@ -1,10 +1,10 @@
 /**
  * VEZZ — cadastro, login e recuperação de senha (, , , , ).
  */
-import { APP, DEFAULT_HOURS } from "../config.js";
+import { APP, DEFAULT_HOURS, isSupabaseEnabled } from "../config.js";
 import { db } from "../lib/db.js";
 import { applyErrors, validarCNPJ, validarCPF, validarEmail, validarNome, validarSenha, validarTelefone, validarCEP } from "../lib/validators.js";
-import { bindMasks, bindPhotoUpload, bot, field, groupForm, header, photoUpload, toast } from "../lib/ui.js";
+import { bindMasks, bindPhotoUpload, bindSubmit, bot, field, groupForm, header, photoUpload, toast } from "../lib/ui.js";
 import { escapeHtml } from "../lib/utils.js";
 
 function authLayout(session, visual, form, botExpr = "calm") {
@@ -22,7 +22,7 @@ function authLayout(session, visual, form, botExpr = "calm") {
 
 export function renderLogin(root, { session, query }) {
   if (session) {
-    location.hash = session.role === "gestor" ? "#/gestor" : "#/paciente";
+    location.hash = session.role === "admin" ? "#/admin-vezz" : session.role === "gestor" ? "#/gestor" : "#/paciente";
     return;
   }
   root.innerHTML = authLayout(
@@ -32,11 +32,11 @@ export function renderLogin(root, { session, query }) {
      <p>Pacientes acompanham a espera. Gestores conduzem o dia da clínica.</p>`,
     `<div class="kicker">Acesso</div>
      <h1>Entrar</h1>
-     <div class="demo-box">
+     ${!isSupabaseEnabled() ? `<div class="demo-box">
        <strong>Acesso rápido</strong><br>
        Paciente <code>ana.silva@email.com</code> · Gestor <code>ricardo@clinicasol.com</code><br>
        Senha de ambos: <code>${APP.demoPassword}</code>
-     </div>
+     </div>` : ""}
      <form id="login">
        ${field({ name: "email", label: "E-mail", type: "email", autocomplete: "username", required: true })}
        ${field({ name: "senha", label: "Senha", type: "password", autocomplete: "current-password", required: true })}
@@ -46,7 +46,7 @@ export function renderLogin(root, { session, query }) {
     "calm"
   );
   const form = root.querySelector("#login");
-  form.addEventListener("submit", async (e) => {
+  bindSubmit(form, async (e) => {
     e.preventDefault();
     const email = form.email.value.trim();
     const senha = form.senha.value;
@@ -66,7 +66,7 @@ export function renderLogin(root, { session, query }) {
 
 export function renderRegisterPatient(root, { session }) {
   if (session) {
-    location.hash = session.role === "gestor" ? "#/gestor" : "#/paciente";
+    location.hash = session.role === "admin" ? "#/admin-vezz" : session.role === "gestor" ? "#/gestor" : "#/paciente";
     return;
   }
   root.innerHTML = authLayout(
@@ -93,7 +93,7 @@ export function renderRegisterPatient(root, { session }) {
   const form = root.querySelector("#reg");
   groupForm(form, [["Seus dados", ["nome", "cpf", "telefone"]], ["Seu acesso", ["email", "senha"]]]);
   bindMasks(form);
-  form.addEventListener("submit", async (e) => {
+  bindSubmit(form, async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form));
     const errors = {};
@@ -180,7 +180,7 @@ export async function renderRegisterManager(root, { session }) {
   };
   form.modo.addEventListener("change", toggle);
 
-  form.addEventListener("submit", async (e) => {
+  bindSubmit(form, async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form));
     const errors = {};
@@ -233,7 +233,7 @@ export function renderRecover(root, { session, query }) {
     session,
     `<div class="kicker kicker-light">Senha</div>
      <h2>A gente te devolve o acesso, sem drama.</h2>
-     <p>O link aparece nesta tela quando o envio local está ativo. Com Supabase, o e-mail sai pelo Auth.</p>`,
+     <p>Receba um link no e-mail da sua conta para definir uma nova senha.</p>`,
     token
       ? `<div class="kicker">Nova senha</div>
          <h1>Redefinir</h1>
@@ -252,7 +252,7 @@ export function renderRecover(root, { session, query }) {
   );
 
   const rec = root.querySelector("#rec");
-  rec?.addEventListener("submit", async (e) => {
+  bindSubmit(rec, async (e) => {
     e.preventDefault();
     const email = rec.email.value.trim();
     if (!validarEmail(email)) return toast("E-mail inválido.", "danger");
@@ -270,7 +270,7 @@ export function renderRecover(root, { session, query }) {
   });
 
   const np = root.querySelector("#newp");
-  np?.addEventListener("submit", async (e) => {
+  bindSubmit(np, async (e) => {
     e.preventDefault();
     if (!validarSenha(np.senha.value)) return toast("Mínimo de 6 caracteres.", "danger");
     try {

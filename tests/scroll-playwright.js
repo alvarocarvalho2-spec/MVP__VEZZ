@@ -61,6 +61,7 @@ async page => {
   await page.waitForTimeout(450);
   check('Native keyboard scrolling remains available', await page.evaluate(before => scrollY > before, beforeKeyboard));
   await position(geometry.timeline.total);
+  await page.waitForFunction(() => document.querySelector('#jornada').dataset.progress === '1.0000', null, { timeout: 2000 });
   const last = await page.locator('#jornada').evaluate(el => ({ progress: el.dataset.progress, last: getComputedStyle(el.querySelector('.j-step:last-child')).opacity }));
   check('Final state remains visible at narrative end', last.progress === '1.0000' && last.last === '1');
   // Anchor-style entry, then the reverse path, must settle without invisible text.

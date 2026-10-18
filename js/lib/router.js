@@ -30,7 +30,10 @@ export function match(path, pattern) {
   if (a.length !== b.length) return null;
   const params = {};
   for (let i = 0; i < b.length; i++) {
-    if (b[i].startsWith(":")) params[b[i].slice(1)] = decodeURIComponent(a[i]);
+    if (b[i].startsWith(":")) {
+      try { params[b[i].slice(1)] = decodeURIComponent(a[i]); }
+      catch { return null; }
+    }
     else if (b[i] !== a[i]) return null;
   }
   return params;

@@ -101,6 +101,7 @@ export async function renderManagerHome(root, { session }) {
           <div class="grid-2">
             <section class="card now-card ${now ? "is-you" : ""}">
               <div class="kicker">Atendimento atual</div>
+              <div data-key="current-service-summary">
               ${
                 now
                   ? `<div class="who">${avatar(now.paciente?.nome, null, "lg")}
@@ -108,14 +109,14 @@ export async function renderManagerHome(root, { session }) {
                          <h2 style="margin:0">${escapeHtml(now.paciente?.nome || "")}</h2>
                          <p>${ticketCode(now)} · ${escapeHtml(now.especialidade || "")} · ${formatTime(now.data_hora)}</p>
                        </div>
-                     </div>
-                     <div style="display:flex;gap:8px;flex-wrap:wrap">
-                       <button class="btn btn-ok" data-finish="${now.id_consulta}">Finalizar atendimento</button>
-                       <button class="btn btn-gold" data-next>Chamar próximo</button>
                      </div>`
-                  : `<p>Nenhum atendimento em andamento.</p>
-                     <button class="btn" data-next ${next ? "" : "disabled"}>Chamar próximo paciente</button>`
+                  : `<p>Nenhum atendimento em andamento.</p>`
               }
+              </div>
+              <div data-key="service-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+                ${now ? `<button class="btn btn-ok" data-finish="${now.id_consulta}">Finalizar atendimento</button>` : ""}
+                <button class="btn ${now ? "btn-gold" : ""}" data-next ${now || next ? "" : "disabled"}>${now ? "Chamar próximo" : "Chamar próximo paciente"}</button>
+              </div>
             </section>
             <aside class="card card-pad">
               <div class="kicker">Próximo</div>
@@ -345,7 +346,7 @@ export async function renderClinicAdmin(root, { session }) {
   }
   const end = c.endereco || {};
   const hoursHtml = `<div class="hours-grid">${Object.entries(c.horarios || {})
-    .map(([k, v]) => `<div><span>${weekdayLabel(k)}</span><strong>${v.length ? v.join(" · ") : "Fechado"}</strong></div>`)
+    .map(([k, v]) => `<div><span>${escapeHtml(weekdayLabel(k))}</span><strong>${Array.isArray(v) && v.length ? escapeHtml(v.join(" · ")) : "Fechado"}</strong></div>`)
     .join("")}</div>`;
   const photoBox = c.foto
     ? `<img src="${escapeHtml(c.foto)}" alt="${escapeHtml(c.nome)}" style="width:100%;height:220px;object-fit:cover;border-radius:14px;margin-bottom:14px">`

@@ -1,5 +1,5 @@
-// Native Chrome DevTools harness: no runtime or test dependencies.
-import { spawn } from 'node:child_process';
+// Existing CDP scenarios, with browser lifecycle managed by Playwright.
+import { chromium } from 'playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
@@ -8,36 +8,12 @@ if (['--verify','--extended','--lifecycle'].some(flag => process.argv.includes(f
   throw Error('Run functional scenarios with --local to use isolated demonstration data.');
 }
 await mkdir(output, { recursive: true });
-const profile = path.join(output, 'chrome-profile');
-const chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', [
-  '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-  '--remote-debugging-port=9223', `--user-data-dir=${profile}`, 'about:blank'
-], { windowsHide: true, stdio: 'ignore' });
-let socket;
-let cdp;
+const browser=await chromium.launch(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH,headless:true}:{channel:'chrome',headless:true});
+const context=await browser.newContext();
+const page=await context.newPage();
+const session=await context.newCDPSession(page);
+const cdp=(method,params={})=>session.send(method,params);
 try {
-  let targets;
-  for (let i = 0; i < 40; i++) {
-    try { targets = await (await fetch('http://127.0.0.1:9223/json')).json(); break; }
-    catch { await delay(250); }
-  }
-  if (!targets) throw Error('Chrome DevTools unavailable');
-  socket = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
-  await new Promise(resolve => socket.addEventListener('open', resolve, { once: true }));
-  let id = 0;
-  const pending = new Map();
-  socket.addEventListener('message', e => {
-    const message = JSON.parse(e.data);
-    if (!message.id) return;
-    const request = pending.get(message.id);
-    pending.delete(message.id);
-    if (message.error) request.reject(Error(message.error.message));
-    else request.resolve(message.result);
-  });
-  cdp = (method, params = {}) => new Promise((resolve, reject) => {
-    pending.set(++id, { resolve, reject });
-    socket.send(JSON.stringify({ id, method, params }));
-  });
   const evaluate = async expression => {
     const r = await cdp('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, replMode: true });
     if (r.exceptionDetails) throw Error(r.exceptionDetails.text + ': ' + r.exceptionDetails.exception?.description);
@@ -52,13 +28,8 @@ try {
   await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   if (process.argv.includes('--local')) {
     await cdp('Page.addScriptToEvaluateOnNewDocument', { source: 'localStorage.clear()' });
-    socket.addEventListener('message', async e => {
-      const m = JSON.parse(e.data);
-      if (m.method === 'Fetch.requestPaused') {
-        await cdp('Fetch.fulfillRequest', { requestId: m.params.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/javascript' }], body: Buffer.from('export const VEZZ_ENV = { supabaseUrl: "", supabaseAnonKey: "" };').toString('base64') });
-      }
-    });
-    await cdp('Fetch.enable', { patterns: [{ urlPattern: '*js/env.js', requestStage: 'Request' }] });
+    await context.route('**/js/env.js',route=>route.fulfill({contentType:'application/javascript',body:'export const VEZZ_ENV={supabaseUrl:"",supabaseAnonKey:""};'}));
+    await context.route('https://*.supabase.co/**',route=>route.abort());
   }
   if (process.argv.includes('--lifecycle')) {
     await cdp('Page.addScriptToEvaluateOnNewDocument', { source: `
@@ -88,6 +59,7 @@ try {
     await verify({ cdp, evaluate, screenshot, delay, output });
   }
   if (process.argv.includes('--extended')) {
+    await evaluate(`location.hash='#/';scrollTo({top:0,behavior:'instant'})`); await delay(1000);
     const { verify } = await import('./extended-scenarios.mjs');
     await verify({ cdp, evaluate, screenshot, delay, output });
   }
@@ -112,7 +84,5 @@ try {
     await writeFile(path.join(output,'lifecycle-verification.json'),JSON.stringify(checks,null,2));
   }
 } finally {
-  if (cdp) await cdp('Browser.close').catch(() => {});
-  socket?.close();
-  chrome.kill();
+  await browser.close();
 }

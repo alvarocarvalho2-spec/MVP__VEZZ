@@ -1,5 +1,8 @@
 -- =============================================================================
 -- VEZZ — schema PostgreSQL para Supabase
+-- BASE: depois deste arquivo, aplique por último a migração
+-- supabase/migrations/20261018163947_auditoria_integridade_acesso.sql.
+-- A versão atual do frontend depende dessa migração. Veja SETUP.md.
 -- Execute no SQL Editor do projeto (Dashboard → SQL → New query).
 -- Em seguida: Authentication → Providers → Email habilitado
 --   (mantenha "Confirm email" DESLIGADO para o cadastro funcionar na hora).

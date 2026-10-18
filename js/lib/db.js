@@ -14,11 +14,15 @@ import {
   combineDateTime,
   compressImageFile,
   generateTimeSlots,
+  formatTime,
   hashPassword,
   isPastDay,
   isPastSlot,
+  isValidDate,
   isSameDay,
   onlyDigits,
+  plusDaysISO,
+  toLocalInputDate,
   uid,
   weekdayKey,
 } from "./utils.js";
@@ -38,7 +42,7 @@ function emit(reason = "update") {
 }
 
 function assertFutureSlot(dateStr, timeStr) {
-  if (!dateStr || !timeStr) throw new Error("Informe data e horário.");
+  if (!isValidDate(dateStr) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr || "")) throw new Error("Informe data e horário válidos.");
   if (isPastDay(dateStr) || isPastSlot(dateStr, timeStr)) {
     throw new Error("Escolha um horário futuro.");
   }
@@ -54,7 +58,7 @@ function isSlotConflict(err) {
 /* =========================================================================
    Local adapter
    ========================================================================= */
-class LocalAdapter {
+export class LocalAdapter {
   constructor() {
     this.db = null;
     this.ready = false;
@@ -242,7 +246,7 @@ class LocalAdapter {
   }
 
   listClinicRequests() {
-    return [...(this.db.solicitacoes || [])].sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
+    return [...(this.db.solicitacoes || [])].map(request => ({ ...request, convite_gestor: this.db.convites.filter(invite => invite.id_solicitacao === request.id_solicitacao) })).sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
   }
 
   async approveClinicRequest(id) {
@@ -456,15 +460,14 @@ class LocalAdapter {
           isSameDay(c.data_hora, dateStr)
       )
       .map((c) => {
-        const d = new Date(c.data_hora);
-        return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        return formatTime(c.data_hora);
       });
   }
 
   availableSlots(idClinica, dateStr, { excludeId } = {}) {
     const clinic = this.getClinic(idClinica);
     if (!clinic || isPastDay(dateStr)) return [];
-    const key = weekdayKey(`${dateStr}T12:00:00`);
+    const key = weekdayKey(dateStr);
     const windows = (clinic.horarios && clinic.horarios[key]) || [];
     return generateTimeSlots(windows, dateStr, this.occupiedSlots(idClinica, dateStr, excludeId), APP.slotMinutes);
   }
@@ -481,6 +484,8 @@ class LocalAdapter {
 
   async bookAppointment({ id_paciente, id_clinica, data, horario, especialidade, observacao }) {
     assertFutureSlot(data, horario);
+    if (!this.getClinic(id_clinica) || !this.getPatient(id_paciente)) throw new Error("Clínica ou paciente não encontrado.");
+    if (!this.availableSlots(id_clinica, data).some(s => s.time === horario && !s.taken)) throw new Error("Horário indisponível ou fora do funcionamento da clínica.");
     const iso = combineDateTime(data, horario);
     const taken = this.occupiedSlots(id_clinica, data);
     if (taken.includes(horario)) throw new Error("Este horário já está ocupado.");
@@ -510,7 +515,7 @@ class LocalAdapter {
   async cancelAppointment(id) {
     const c = this.db.consultas.find((x) => x.id_consulta === id);
     if (!c) throw new Error("Consulta não encontrada.");
-    if (c.status === STATUS.FINALIZADA) throw new Error("Consulta já finalizada.");
+    if (c.status !== STATUS.AGENDADA) throw new Error("Só é possível cancelar consultas agendadas.");
     c.status = STATUS.CANCELADA;
     this.db.fila = this.db.fila.filter((f) => f.id_consulta !== id);
     this.reindexQueue(c.id_clinica, c.data_hora);
@@ -524,12 +529,10 @@ class LocalAdapter {
     if (c.status !== STATUS.AGENDADA) throw new Error("Só é possível reagendar consultas agendadas.");
     assertFutureSlot(data, horario);
     const iso = combineDateTime(data, horario);
-    const taken = this.occupiedSlots(c.id_clinica, data).filter((t) => {
-      const old = new Date(c.data_hora);
-      const label = `${String(old.getHours()).padStart(2, "0")}:${String(old.getMinutes()).padStart(2, "0")}`;
-      return t !== label;
-    });
+    const taken = this.occupiedSlots(c.id_clinica, data, id);
     if (taken.includes(horario)) throw new Error("Este horário já está ocupado.");
+    if (this.hasAppointmentOnDay(c.id_paciente, data, id)) throw new Error("Você já possui uma consulta neste dia.");
+    if (!this.availableSlots(c.id_clinica, data, { excludeId: id }).some(s => s.time === horario && !s.taken)) throw new Error("Horário fora do funcionamento da clínica.");
     const dataAntiga = c.data_hora;
     c.data_hora = iso;
     this.db.fila = this.db.fila.filter((f) => f.id_consulta !== id);
@@ -591,7 +594,7 @@ class LocalAdapter {
         (a) =>
           a &&
           a.id_clinica === idClinica &&
-          isSameDay(a.data_hora, today) &&
+          (isSameDay(a.data_hora, today) || a.status === STATUS.EM_ATENDIMENTO) &&
           a.status !== STATUS.CANCELADA &&
           a.status !== STATUS.FINALIZADA
       )
@@ -623,6 +626,8 @@ class LocalAdapter {
   async startService(idConsulta) {
     const c = this.db.consultas.find((x) => x.id_consulta === idConsulta);
     if (!c) throw new Error("Consulta não encontrada.");
+    if (c.status !== STATUS.AGENDADA) throw new Error("Só é possível iniciar consultas agendadas.");
+    if (!isSameDay(c.data_hora, new Date())) throw new Error("O atendimento só pode ocorrer no dia da consulta.");
     const busy = this.db.consultas.find(
       (x) => x.id_clinica === c.id_clinica && x.status === STATUS.EM_ATENDIMENTO && x.id_consulta !== idConsulta
     );
@@ -642,6 +647,7 @@ class LocalAdapter {
   async finishService(idConsulta) {
     const c = this.db.consultas.find((x) => x.id_consulta === idConsulta);
     if (!c) throw new Error("Consulta não encontrada.");
+    if (c.status !== STATUS.EM_ATENDIMENTO) throw new Error("Só é possível finalizar um atendimento em andamento.");
     c.status = STATUS.FINALIZADA;
     const f = this.db.fila.find((x) => x.id_consulta === idConsulta);
     if (f) f.hora_fim = new Date().toISOString();
@@ -664,7 +670,7 @@ class LocalAdapter {
       total: list.length,
       agendadas: list.filter((c) => c.status === STATUS.AGENDADA).length,
       aguardando: this.getQueue(idClinica).filter((c) => c.status === STATUS.AGENDADA).length,
-      emAtendimento: list.find((c) => c.status === STATUS.EM_ATENDIMENTO) || null,
+      emAtendimento: this.db.consultas.filter(c => c.id_clinica === idClinica && c.status === STATUS.EM_ATENDIMENTO).map(c => this.hydrateAppointment(c))[0] || null,
       finalizadas: list.filter((c) => c.status === STATUS.FINALIZADA).length,
       canceladas: list.filter((c) => c.status === STATUS.CANCELADA).length,
       lista: list,
@@ -676,7 +682,7 @@ class LocalAdapter {
 /* =========================================================================
    Supabase adapter (Auth + REST)
    ========================================================================= */
-class SupabaseAdapter {
+export class SupabaseAdapter {
   constructor(cfg) {
     this.url = cfg.url.replace(/\/$/, "");
     this.key = cfg.anonKey;
@@ -689,18 +695,19 @@ class SupabaseAdapter {
       apikey: this.key,
       Authorization: `Bearer ${this.session?.access_token || this.key}`,
       "Content-Type": "application/json",
+      "X-Client-Info": "vezz-web/20261018",
       ...extra,
     };
     return h;
   }
 
-  async rest(path, { method = "GET", body, query, single } = {}, _retry = true) {
+  async rest(path, { method = "GET", body, query, single, minimal = false } = {}, _retry = true) {
     const url = new URL(`${this.url}/rest/v1/${path}`);
     if (query) Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
     // Escrita anônima vai com return=minimal: com return=representation o PostgREST só
     // devolve o registro inserido se ele for legível pela policy de SELECT do role atual —
     // e o formulário público (anônimo) grava em tabela que só o admin lê (dava 42501).
-    const writePrefer = this.session?.access_token ? "return=representation" : "return=minimal";
+    const writePrefer = this.session?.access_token && !minimal ? "return=representation" : "return=minimal";
     const res = await fetch(url, {
       method,
       headers: this.headers(single ? { Accept: "application/vnd.pgrst.object+json" } : { Prefer: writePrefer }),
@@ -708,7 +715,7 @@ class SupabaseAdapter {
     });
     // O token de acesso expira em 1h: em caso de 401, renova a sessão uma vez e repete a chamada.
     if (res.status === 401 && _retry && this.session?.refresh_token && (await this.refreshSession())) {
-      return this.rest(path, { method, body, query, single }, false);
+      return this.rest(path, { method, body, query, single, minimal }, false);
     }
     if (res.status === 204) return null;
     const data = await res.json().catch(() => ({}));
@@ -722,15 +729,24 @@ class SupabaseAdapter {
     return data;
   }
 
+  async restAll(path, query) {
+    const rows=[], limit=500;
+    for(let offset=0;;offset+=limit) {
+      const page=await this.rest(path,{query:{...query,limit,offset}});
+      rows.push(...(page||[]));
+      if(!page || page.length<limit)return rows;
+    }
+  }
+
   // Chamada RPC (funções security definer do banco — ex.: vezz_horarios_ocupados)
-  async rpc(name, body = {}) {
+  async rpc(name, body = {}, retry = true) {
     const res = await fetch(`${this.url}/rest/v1/rpc/${name}`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(body),
     });
-    if (res.status === 401 && this.session?.refresh_token && (await this.refreshSession())) {
-      return this.rpc(name, body);
+    if (res.status === 401 && retry && this.session?.refresh_token && (await this.refreshSession())) {
+      return this.rpc(name, body, false);
     }
     const data = await res.json().catch(() => null);
     if (!res.ok) {
@@ -760,22 +776,40 @@ class SupabaseAdapter {
   }
 
   async refreshSession() {
+    if (this.refreshPending) return this.refreshPending;
     const refreshToken = this.session?.refresh_token;
     if (!refreshToken) return false;
-    try {
+    this.refreshPending = (async () => { try {
       const auth = await this.auth("token?grant_type=refresh_token", { refresh_token: refreshToken });
+      // A pending refresh must never restore a session after logout or another login.
+      if (this.session?.refresh_token !== refreshToken) return false;
       this.session = { ...this.session, access_token: auth.access_token, refresh_token: auth.refresh_token || refreshToken };
       this.persistSession();
       return true;
     } catch {
-      await this.signOut();
+      if (this.session?.refresh_token === refreshToken) { this.session = null; this.persistSession(); }
       return false;
-    }
+    } finally { this.refreshPending = null; } })();
+    return this.refreshPending;
   }
 
   async init() {
+    const callback = new URLSearchParams(location.hash.slice(1));
+    if (callback.get("type") === "recovery" && callback.get("access_token")) {
+      this.session = { access_token: callback.get("access_token"), refresh_token: callback.get("refresh_token"), recovery: true };
+      // Remove secrets from the address before rendering or making other requests.
+      history.replaceState(null, "", "#/recuperar-senha?token=recovery");
+      const user = await fetch(`${this.url}/auth/v1/user`, { headers: this.headers() });
+      if (!user.ok) { this.session = null; this.persistSession(); throw new Error("Link de recuperação inválido ou expirado."); }
+      this.persistSession(); this.ready = true;
+      return null;
+    }
     try {
       const saved = JSON.parse(localStorage.getItem(APP.sessionKey) || "null");
+      if (saved?.access_token && saved.recovery) {
+        this.session = saved;
+        return null;
+      }
       if (saved?.access_token) {
         this.session = saved;
         let me;
@@ -798,7 +832,7 @@ class SupabaseAdapter {
   }
 
   getSession() {
-    if (!this.session) return null;
+    if (!this.session || this.session.recovery) return null;
     return {
       role: this.session.role,
       id: this.session.id,
@@ -840,11 +874,12 @@ class SupabaseAdapter {
         principal: !!ges[0].principal,
       };
     }
-    return { role: "paciente", id: user.id, nome: user.user_metadata?.nome || email, email, foto: "" };
+    throw new Error("Seu cadastro está incompleto. Entre em contato com a clínica para regularizar o acesso.");
   }
 
   async signUpPatient(data) {
     const auth = await this.auth("signup", { email: data.email, password: data.senha, data: { nome: data.nome, role: "paciente" } });
+    if (!(auth.access_token || auth.session?.access_token)) throw new Error("Confirme o e-mail recebido. O cadastro precisa ser concluído após a confirmação; entre em contato com a clínica se necessário.");
     this.session = { access_token: auth.access_token || auth.session?.access_token, ...auth };
     const row = {
       nome: data.nome,
@@ -853,7 +888,9 @@ class SupabaseAdapter {
       telefone: data.telefone,
       senha: "supabase-auth",
     };
-    const created = await this.rest("paciente", { method: "POST", body: row });
+    let created;
+    try { created = await this.rest("paciente", { method: "POST", body: row }); }
+    catch(error) { await this.signOut(); throw error; }
     const rec = created[0] || created;
     this.session = {
       access_token: this.session.access_token,
@@ -906,35 +943,32 @@ class SupabaseAdapter {
   // Cria um gestor adicional na clínica do gestor logado, sem trocar a sessão atual.
   async createManager(data, idClinica) {
     if (!idClinica) throw new Error("Clínica não encontrada.");
-    await this.auth("signup", { email: data.email, password: data.senha, data: { nome: data.nome, role: "gestor" } });
-    const created = await this.rest("gestor", {
-      method: "POST",
-      body: {
-        nome: data.nome,
-        email: data.email.trim().toLowerCase(),
-        senha: "supabase-auth",
-        cargo: data.cargo || "Gestor",
-        id_clinica: idClinica,
-      },
+    const response = await fetch(`${this.url}/functions/v1/accept-clinic-invite?action=create-manager`, {
+      method: "POST", headers: this.headers(), body: JSON.stringify({ ...data, id_clinica: idClinica }),
     });
-    return created[0] || created;
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Não foi possível cadastrar o gestor.");
+    return result;
   }
 
   async signIn(email, senha) {
     const auth = await this.auth("token?grant_type=password", { email, password: senha });
     this.session = { access_token: auth.access_token, refresh_token: auth.refresh_token };
-    const profile = await this.currentProfile();
+    let profile;
+    try { profile = await this.currentProfile(); }
+    catch (error) { await this.signOut(); throw error; }
     this.session = { ...this.session, ...profile };
     this.persistSession();
     return this.getSession();
   }
 
   async signOut() {
-    try {
-      await fetch(`${this.url}/auth/v1/logout`, { method: "POST", headers: this.headers() });
-    } catch { /* ignore */ }
+    const headers = this.headers();
     this.session = null;
     this.persistSession();
+    try {
+      await fetch(`${this.url}/auth/v1/logout`, { method: "POST", headers });
+    } catch { /* ignore */ }
   }
 
   async adminSignIn(email, senha) {
@@ -960,25 +994,20 @@ class SupabaseAdapter {
   }
 
   async createClinicRequest(data) {
-    const created = await this.rest("solicitacao_clinica", { method: "POST", body: data });
-    return created[0] || created;
+    await this.rest("solicitacao_clinica", { method: "POST", body: data, minimal: true });
+    return true;
   }
 
   async listClinicRequests() {
-    return (await this.rest("solicitacao_clinica", { query: { select: "*", order: "criado_em.desc" } })) || [];
+    return this.restAll("solicitacao_clinica", { select: "*,convite_gestor(token,usado,criado_em)", order: "criado_em.desc,id_solicitacao.desc" });
   }
 
   async approveClinicRequest(id) {
-    const rows = await this.rest("solicitacao_clinica", { query: { id_solicitacao: `eq.${id}`, select: "*" } });
-    const request = rows?.[0];
-    if (!request || request.status !== "Pendente") throw new Error("Solicitação inválida ou já analisada.");
-    await this.rest("solicitacao_clinica", { method: "PATCH", body: { status: "Aprovada", analisada_em: new Date().toISOString() }, query: { id_solicitacao: `eq.${id}` } });
-    const invite = (await this.rest("convite_gestor", { method: "POST", body: { id_solicitacao: id, token: uid("inv") } }))[0];
-    return { request: { ...request, status: "Aprovada" }, invite };
+    return this.rpc("vezz_analisar_solicitacao", { p_id: id, p_aprovar: true });
   }
 
   async rejectClinicRequest(id) {
-    await this.rest("solicitacao_clinica", { method: "PATCH", body: { status: "Recusada", analisada_em: new Date().toISOString() }, query: { id_solicitacao: `eq.${id}` } });
+    await this.rpc("vezz_analisar_solicitacao", { p_id: id, p_aprovar: false });
     return true;
   }
 
@@ -997,12 +1026,18 @@ class SupabaseAdapter {
   }
 
   async requestPasswordReset(email) {
-    await this.auth("recover", { email });
+    const redirect = `${location.origin}${location.pathname}`;
+    await this.auth(`recover?redirect_to=${encodeURIComponent(redirect)}`, { email });
     return { demo: false };
   }
 
-  async confirmPasswordReset() {
-    throw new Error("Abra o link enviado ao e-mail para definir a nova senha.");
+  async confirmPasswordReset(_token, password) {
+    if (!this.session?.recovery) throw new Error("Abra o link de recuperação enviado ao seu e-mail.");
+    if (String(password || "").length < 6) throw new Error("Mínimo de 6 caracteres.");
+    const response = await fetch(`${this.url}/auth/v1/user`, { method: "PUT", headers: this.headers(), body: JSON.stringify({ password }) });
+    if (!response.ok) throw new Error("Link inválido ou expirado. Solicite uma nova recuperação de senha.");
+    await this.signOut();
+    return true;
   }
 
   async createClinic(data) {
@@ -1035,8 +1070,8 @@ class SupabaseAdapter {
   }
 
   async updateClinic(id, patch) {
-    if (patch.clinica) await this.rest("clinica", { method: "PATCH", body: patch.clinica, query: { id_clinica: `eq.${id}` } });
-    if (patch.endereco) await this.rest("endereco", { method: "PATCH", body: patch.endereco, query: { id_clinica: `eq.${id}` } });
+    if (patch.clinica) this.requireUpdated(await this.rest("clinica", { method: "PATCH", body: patch.clinica, query: { id_clinica: `eq.${id}` } }));
+    if (patch.endereco) this.requireUpdated(await this.rest("endereco", { method: "PATCH", body: patch.endereco, query: { id_clinica: `eq.${id}` } }));
     emit("clinic");
     return this.getClinic(id);
   }
@@ -1044,11 +1079,8 @@ class SupabaseAdapter {
   // Envia a foto da clínica para o bucket "fotos-clinicas" (caminho: <id_clinica>/foto.<ext>)
   // e grava a URL pública em clinica.foto. Só o gestor principal consegue (policy do bucket).
   async uploadClinicPhoto(idClinica, file) {
-    let blob = file;
-    try {
-      const dataUrl = await compressImageFile(file);
-      blob = await (await fetch(dataUrl)).blob();
-    } catch { /* se nao conseguir comprimir, envia o arquivo original */ }
+    const dataUrl = await compressImageFile(file);
+    const blob = await (await fetch(dataUrl)).blob();
     const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
     const path = `${idClinica}/foto.${ext}`;
     const res = await fetch(`${this.url}/storage/v1/object/fotos-clinicas/${path}`, {
@@ -1064,7 +1096,7 @@ class SupabaseAdapter {
   }
 
   async listClinics({ q = "", cidade = "", bairro = "", local = "" } = {}) {
-    const rows = await this.rest("clinica", { query: { select: "*,endereco(*)" } });
+    const rows = await this.restAll("clinica", { select: "*,endereco(*)", order: "nome.asc,id_clinica.asc" });
     const query = q.trim().toLowerCase();
     const city = cidade.trim().toLowerCase();
     const hood = bairro.trim().toLowerCase();
@@ -1097,21 +1129,24 @@ class SupabaseAdapter {
   }
 
   async listPatients(idClinica) {
-    const consultas = await this.rest("consulta", {
-      query: { select: "id_paciente,id_clinica", ...(idClinica ? { id_clinica: `eq.${idClinica}` } : {}) },
-    });
+    const consultas = await this.restAll("consulta", { select: "id_paciente,id_clinica", order: "id_consulta.asc", ...(idClinica ? { id_clinica: `eq.${idClinica}` } : {}) });
     const ids = [...new Set((consultas || []).map((c) => c.id_paciente))];
     if (!ids.length) return [];
-    const pacientes = await this.rest("paciente", { query: { id_paciente: `in.(${ids.join(",")})`, select: "id_paciente,nome,cpf,email,telefone,foto" } });
-    return pacientes || [];
+    const pacientes=[];
+    for(let offset=0;offset<ids.length;offset+=200) pacientes.push(...await this.restAll("paciente", { id_paciente: `in.(${ids.slice(offset,offset+200).join(",")})`, select: "id_paciente,nome,cpf,email,telefone,foto", order: "id_paciente.asc" }));
+    return pacientes;
   }
 
   async listAppointments({ id_paciente, id_clinica, status, day } = {}) {
-    const query = { select: "*,paciente(*),clinica(*,endereco(*)),fila_atendimento(*)", order: "data_hora.asc" };
+    const query = { select: "*,paciente(*),clinica(*,endereco(*)),fila_atendimento(*)", order: "data_hora.asc,id_consulta.asc" };
     if (id_paciente) query.id_paciente = `eq.${id_paciente}`;
     if (id_clinica) query.id_clinica = `eq.${id_clinica}`;
     if (status) query.status = `eq.${status}`;
-    const rows = await this.rest("consulta", { query });
+    if(day) {
+      const date=toLocalInputDate(day);
+      query.and=`(data_hora.gte.${combineDateTime(date,"00:00")},data_hora.lt.${combineDateTime(plusDaysISO(1,date),"00:00")})`;
+    }
+    const rows = await this.restAll("consulta", query);
     return (rows || [])
       .map(hydrateRemote)
       .filter((c) => !day || isSameDay(c.data_hora, day));
@@ -1135,14 +1170,7 @@ class SupabaseAdapter {
       })) || [];
       return slots;
     } catch {
-      // Migração ainda não aplicada: cai na leitura direta (limitada pela policy)
-      const list = await this.listAppointments({ id_clinica: idClinica, day: dateStr });
-      return list
-        .filter((c) => (c.status === STATUS.AGENDADA || c.status === STATUS.EM_ATENDIMENTO) && c.id_consulta !== excludeId)
-        .map((c) => {
-          const d = new Date(c.data_hora);
-          return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-        });
+      throw new Error("Não foi possível consultar a disponibilidade. Tente novamente.");
     }
   }
 
@@ -1150,7 +1178,7 @@ class SupabaseAdapter {
     if (isPastDay(dateStr)) return [];
     const clinic = await this.getClinic(idClinica);
     const taken = new Set(await this.occupiedSlots(idClinica, dateStr, excludeId));
-    const key = weekdayKey(`${dateStr}T12:00:00`);
+    const key = weekdayKey(dateStr);
     const windows = (clinic?.horarios && clinic.horarios[key]) || [];
     return generateTimeSlots(windows, dateStr, taken, APP.slotMinutes);
   }
@@ -1193,7 +1221,7 @@ class SupabaseAdapter {
     }
     const rec = created[0] || created;
     // Toda consulta entra na fila do seu dia (a posição é atribuída pelo banco)
-    await this.joinQueue(rec);
+    // The database trigger creates the queue in the same transaction.
     emit("book");
     return this.getAppointment(rec.id_consulta);
   }
@@ -1210,8 +1238,7 @@ class SupabaseAdapter {
   }
 
   async cancelAppointment(id) {
-    await this.rest("consulta", { method: "PATCH", body: { status: STATUS.CANCELADA }, query: { id_consulta: `eq.${id}` } });
-    await this.rest("fila_atendimento", { method: "DELETE", query: { id_consulta: `eq.${id}` } });
+    this.requireUpdated(await this.rest("consulta", { method: "PATCH", body: { status: STATUS.CANCELADA }, query: { id_consulta: `eq.${id}` } }));
     emit("cancel");
     return this.getAppointment(id);
   }
@@ -1220,22 +1247,20 @@ class SupabaseAdapter {
     assertFutureSlot(data, horario);
     const iso = combineDateTime(data, horario);
     try {
-      await this.rest("consulta", { method: "PATCH", body: { data_hora: iso }, query: { id_consulta: `eq.${id}` } });
+      this.requireUpdated(await this.rest("consulta", { method: "PATCH", body: { data_hora: iso }, query: { id_consulta: `eq.${id}` } }));
     } catch (err) {
       if (isSlotConflict(err)) throw new Error("Este horário acabou de ser ocupado por outro paciente. Escolha outro horário.");
       throw err;
     }
     const ap = await this.getAppointment(id);
-    if (ap?.fila) await this.rest("fila_atendimento", { method: "DELETE", query: { id_consulta: `eq.${id}` } });
-    // Reentra na fila da nova data (posição atribuída pelo banco)
-    if (ap) await this.joinQueue(ap);
     emit("reschedule");
     return ap;
   }
 
   async getQueue(idClinica) {
     const list = await this.listAppointments({ id_clinica: idClinica, day: new Date() });
-    return list
+    const running = await this.listAppointments({ id_clinica: idClinica, status: STATUS.EM_ATENDIMENTO });
+    return [...new Map([...list,...running].map(appointment => [appointment.id_consulta,appointment])).values()]
       .filter((a) => a.status === STATUS.AGENDADA || a.status === STATUS.EM_ATENDIMENTO)
       .sort((a, b) => {
         if (a.status === STATUS.EM_ATENDIMENTO) return -1;
@@ -1273,44 +1298,38 @@ class SupabaseAdapter {
   }
 
   async startService(idConsulta) {
-    await this.rest("consulta", { method: "PATCH", body: { status: STATUS.EM_ATENDIMENTO }, query: { id_consulta: `eq.${idConsulta}` } });
-    await this.rest("fila_atendimento", {
-      method: "PATCH",
-      body: { hora_inicio: new Date().toISOString(), posicao: 0 },
-      query: { id_consulta: `eq.${idConsulta}` },
-    });
+    this.requireUpdated(await this.rest("consulta", { method: "PATCH", body: { status: STATUS.EM_ATENDIMENTO }, query: { id_consulta: `eq.${idConsulta}` } }));
     emit("start");
     return this.getAppointment(idConsulta);
   }
 
   async finishService(idConsulta) {
-    await this.rest("consulta", { method: "PATCH", body: { status: STATUS.FINALIZADA }, query: { id_consulta: `eq.${idConsulta}` } });
-    await this.rest("fila_atendimento", {
-      method: "PATCH",
-      body: { hora_fim: new Date().toISOString() },
-      query: { id_consulta: `eq.${idConsulta}` },
-    });
+    this.requireUpdated(await this.rest("consulta", { method: "PATCH", body: { status: STATUS.FINALIZADA }, query: { id_consulta: `eq.${idConsulta}` } }));
     emit("finish");
     return this.getAppointment(idConsulta);
+  }
+
+  requireUpdated(rows) {
+    if (!Array.isArray(rows) || rows.length !== 1) throw new Error("O registro não está disponível ou você não tem permissão para alterá-lo. Atualize a página.");
   }
 
   async callNext(idClinica) {
     const queue = await this.getQueue(idClinica);
     const current = queue.find((q) => q.status === STATUS.EM_ATENDIMENTO);
-    if (current) await this.finishService(current.id_consulta);
-    const next = queue.find((q) => q.status === STATUS.AGENDADA);
-    if (!next) return null;
-    return this.startService(next.id_consulta);
+    const id = await this.rpc("vezz_chamar_proximo", { p_id_clinica: idClinica, p_atual_esperado: current?.id_consulta || null });
+    emit("next");
+    return id ? this.getAppointment(id) : null;
   }
 
   async todayPanel(idClinica) {
     const list = await this.listAppointments({ id_clinica: idClinica, day: new Date() });
+    const running = await this.listAppointments({ id_clinica: idClinica, status: STATUS.EM_ATENDIMENTO });
     const queue = list.filter((c) => c.status === STATUS.AGENDADA || c.status === STATUS.EM_ATENDIMENTO);
     return {
       total: list.length,
       agendadas: list.filter((c) => c.status === STATUS.AGENDADA).length,
       aguardando: queue.filter((c) => c.status === STATUS.AGENDADA).length,
-      emAtendimento: list.find((c) => c.status === STATUS.EM_ATENDIMENTO) || null,
+      emAtendimento: running[0] || null,
       finalizadas: list.filter((c) => c.status === STATUS.FINALIZADA).length,
       canceladas: list.filter((c) => c.status === STATUS.CANCELADA).length,
       lista: list,

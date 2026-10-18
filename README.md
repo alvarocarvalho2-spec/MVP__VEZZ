@@ -6,6 +6,11 @@ O app funciona conectado ao **Supabase** (Auth + banco + Edge Function). Sem bui
 **👉 Setup do zero (projeto Supabase novo): [SETUP.md](SETUP.md)**
 Execução local: **[RODAR.md](RODAR.md)**.
 
+Auditoria de funcionamento e segurança: **[relatório de 18/10/2026](docs/AUDITORIA-2026-10-18.md)**.
+Ao atualizar esta versão, aplique a migração de segurança e publique a Edge Function junto do frontend, na ordem documentada no relatório.
+
+Testes adicionais (Node.js 24+ e Chrome instalado): `npm ci`, `npm test`, `npm run test:logic` e `npm run test:browser`. O último inicia seu próprio servidor e bloqueia chamadas para serviços externos. `npm run test:legacy` usa um servidor em `localhost:8080` e sempre executa com dados locais.
+
 ## Deploy na Vercel
 
 O projeto já possui `vercel.json`, não depende de build e pode ser publicado como site estático a partir da pasta raiz. **Não precisa de variável de ambiente na Vercel**: a anon key fica no `js/env.js` (é pública por design — a segurança dos dados vem das policies RLS). A `service_role` nunca vai para o frontend nem para a Vercel; só o ambiente da Edge Function tem ela.

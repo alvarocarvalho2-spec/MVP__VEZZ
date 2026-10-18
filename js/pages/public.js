@@ -7,6 +7,7 @@ import {
   addressLine,
   avatar,
   bindMasks,
+  bindSubmit,
   bindSlotPicker,
   bot,
   bottomNav,
@@ -25,6 +26,7 @@ import {
   weekdayLabel,
 } from "../lib/utils.js";
 import { initJornada, initParallax, startQueueDemo } from "../lib/motion.js";
+import { applyErrors, validarCNPJ, validarEmail, validarNome, validarTelefone, validarCEP } from "../lib/validators.js";
 
 // Atualização ao vivo da tela de agendamento: enquanto a tela está aberta, a
 // grade de horários consulta o banco de novo (outros pacientes podem marcar).
@@ -277,7 +279,19 @@ export function renderClinicRequest(root, { session }) {
   }
   root.innerHTML = `${header(session)}<main class="page"><div class="wrap-xs card card-pad"><div class="kicker">Para clínicas</div><h1>Quer cadastrar sua clínica?</h1><p>Envie suas informações. A equipe VEZZ analisa a solicitação e entra em contato para orientar os próximos passos.</p><form id="clinic-request">${field({ name: "nome_clinica", label: "Nome da clínica", required: true })}${field({ name: "cnpj", label: "CNPJ", required: true })}${field({ name: "responsavel", label: "Nome do responsável", required: true })}${field({ name: "email_responsavel", label: "E-mail do responsável", type: "email", required: true })}${field({ name: "telefone_responsavel", label: "Telefone do responsável", required: true })}${field({ name: "telefone_clinica", label: "Telefone da clínica", required: true })}${field({ name: "especialidades", label: "Especialidades", placeholder: "Cardiologia, Clínica Geral", required: true })}<div class="field-row">${field({ name: "rua", label: "Rua", required: true })}${field({ name: "numero", label: "Número", required: true })}</div><div class="field-row">${field({ name: "bairro", label: "Bairro", required: true })}${field({ name: "cidade", label: "Cidade", required: true })}</div>${field({ name: "cep", label: "CEP", required: true })}${field({ name: "descricao", label: "Sobre a clínica", type: "textarea" })}<button class="btn btn-block">Enviar solicitação</button></form></div></main>${footer()}`;
   groupForm(root.querySelector("#clinic-request"), [["A clínica", ["nome_clinica", "cnpj", "telefone_clinica", "especialidades", "descricao"]], ["Responsável pelo cadastro", ["responsavel", "email_responsavel", "telefone_responsavel"]], ["Endereço", ["rua", "numero", "bairro", "cidade", "cep"]]]);
-  root.querySelector("#clinic-request").addEventListener("submit", async (e) => { e.preventDefault(); try { await db().createClinicRequest(Object.fromEntries(new FormData(e.target))); toast("Solicitação enviada. A equipe VEZZ entrará em contato.", "ok"); location.hash = "#/"; } catch (err) { toast(err.message, "danger"); } });
+  const form=root.querySelector("#clinic-request");
+  bindMasks(form);
+  bindSubmit(form, async () => {
+    const data=Object.fromEntries(new FormData(form)), errors={};
+    if(!validarCNPJ(data.cnpj))errors.cnpj="CNPJ inválido.";
+    if(!validarNome(data.responsavel))errors.responsavel="Informe nome e sobrenome.";
+    if(!validarEmail(data.email_responsavel))errors.email_responsavel="E-mail inválido.";
+    for(const name of ["telefone_clinica","telefone_responsavel"])if(!validarTelefone(data[name]))errors[name]="Telefone inválido.";
+    if(!validarCEP(data.cep))errors.cep="CEP inválido.";
+    if(!applyErrors(form,errors))return;
+    try { await db().createClinicRequest(data); toast("Solicitação enviada. A equipe VEZZ entrará em contato.", "ok"); location.hash = "#/"; }
+    catch (err) { toast(err.message, "danger"); }
+  });
 }
 
 export async function renderClinics(root, { session, query }) {
@@ -321,7 +335,7 @@ export async function renderClinic(root, { session, params }) {
     return;
   }
   const hours = Object.entries(c.horarios || {})
-    .map(([k, v]) => `<div><span>${weekdayLabel(k)}</span><strong>${v.length ? v.join(" · ") : "Fechado"}</strong></div>`)
+    .map(([k, v]) => `<div><span>${escapeHtml(weekdayLabel(k))}</span><strong>${Array.isArray(v) && v.length ? escapeHtml(v.join(" · ")) : "Fechado"}</strong></div>`)
     .join("");
   root.innerHTML = `
     ${header(session)}

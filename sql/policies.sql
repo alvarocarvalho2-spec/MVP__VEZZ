@@ -264,3 +264,5 @@ create policy "fotos-clinicas: trocar (gestor principal)" on storage.objects
         and g.principal
     )
   );
+-- BASE LEGADA: reaplicar este arquivo exige reaplicar por último
+-- supabase/migrations/20261018163947_auditoria_integridade_acesso.sql.

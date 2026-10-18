@@ -5,6 +5,21 @@ import { APP } from "../config.js";
 import { bot } from "./bot-sprite.js";
 import { addressLine, compressImageFile, el, escapeHtml, formatDateTime, formatMinutes, initials, maskCEP, maskCNPJ, maskCPF, maskPhone, statusTone, ticketCode } from "./utils.js";
 
+export function bindSubmit(form, handler) {
+  let pending = false;
+  form?.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (pending) return;
+    pending = true;
+    const buttons = [...form.querySelectorAll('button:not([type]),button[type="submit"],input[type="submit"]')];
+    const disabled = buttons.map(button => button.disabled);
+    form.setAttribute("aria-busy", "true");
+    buttons.forEach(button => { button.disabled = true; });
+    try { await handler(event); }
+    finally { pending = false; form.removeAttribute("aria-busy"); buttons.forEach((button,i) => { button.disabled = disabled[i]; }); }
+  });
+}
+
 // Reconcile live views in place. Keys follow records rather than their position.
 export function updateLiveView(root, html) {
   if (!root.isConnected) return;

@@ -1,6 +1,6 @@
 import { APP } from "../config.js";
 import { db } from "../lib/db.js";
-import { field, footer, toast } from "../lib/ui.js";
+import { bindSubmit, field, toast } from "../lib/ui.js";
 import { escapeHtml, formatDateTime } from "../lib/utils.js";
 
 function shell(content) {
@@ -10,7 +10,7 @@ function shell(content) {
 export async function renderAdmin(root, { session }) {
   if (!session || session.role !== "admin") {
     root.innerHTML = shell(`<div class="card card-pad"><div class="kicker">Acesso reservado</div><h1>Painel administrativo</h1><p>Entre com as credenciais administrativas VEZZ.</p><form id="admin-login">${field({ name: "email", label: "E-mail", type: "email", required: true })}${field({ name: "senha", label: "Senha", type: "password", required: true })}<button class="btn btn-lg btn-block">Entrar</button></form></div>`);
-    root.querySelector("#admin-login").addEventListener("submit", async (e) => {
+    bindSubmit(root.querySelector("#admin-login"), async (e) => {
       e.preventDefault();
       try { await db().adminSignIn(e.target.email.value, e.target.senha.value); await renderAdmin(root, { session: db().getSession() }); } catch (err) { toast(err.message, "danger"); }
     });
@@ -18,11 +18,24 @@ export async function renderAdmin(root, { session }) {
   }
   const requests = await db().listClinicRequests();
   root.innerHTML = shell(`<div class="admin-head"><div><div class="kicker">VEZZ · Administração</div><h1>Solicitações de clínicas</h1><p>Aprove ou recuse novos cadastros e gere o convite do primeiro gestor.</p></div><button class="btn btn-ghost" id="admin-out">Sair</button></div><div class="list">${requests.length ? requests.map(requestCard).join("") : `<div class="empty card"><h3>Nenhuma solicitação ainda</h3><p>As novas solicitações aparecerão aqui.</p></div>`}</div>`);
+  requests.forEach((request,index) => {
+    const invite=request.status==='Aprovada'?(request.convite_gestor||[]).find(item=>!item.usado&&new Date(item.criado_em).getTime()>Date.now()-7*86400000):null;
+    if(!invite)return;
+    const input=document.createElement('input');input.readOnly=true;input.setAttribute('aria-label','Convite do responsável');
+    input.value=`${location.origin}${location.pathname}#/convite/${invite.token}`;
+    root.querySelectorAll('.request-result')[index]?.append(input);
+  });
   root.querySelector("#admin-out").addEventListener("click", async () => { await db().signOut(); location.hash = "#/"; });
   root.querySelectorAll("[data-approve]").forEach((button) => button.addEventListener("click", async () => {
-    try { const result = await db().approveClinicRequest(button.dataset.approve); const link = `${location.origin}${location.pathname}#/convite/${result.invite.token}`; button.closest(".admin-request").querySelector(".request-result").innerHTML = `<p class="badge ok">Aprovada</p><p>Envie este convite ao responsável:</p><input readonly value="${escapeHtml(link)}">`; } catch (err) { toast(err.message, "danger"); }
+    if(button.disabled)return;button.disabled=true;
+    try { const result = await db().approveClinicRequest(button.dataset.approve); const link = `${location.origin}${location.pathname}#/convite/${result.invite.token}`; button.closest(".admin-request").querySelector(".request-result").innerHTML = `<p class="badge ok">Aprovada</p><p>Envie este convite ao responsável:</p><input aria-label="Convite do responsável" readonly value="${escapeHtml(link)}">`; } catch (err) { toast(err.message, "danger"); } finally {button.disabled=false;}
   }));
-  root.querySelectorAll("[data-reject]").forEach((button) => button.addEventListener("click", async () => { await db().rejectClinicRequest(button.dataset.reject); renderAdmin(root, { session: db().getSession() }); }));
+  root.querySelectorAll("[data-reject]").forEach((button) => button.addEventListener("click", async () => {
+    if(button.disabled)return;button.disabled=true;
+    try { await db().rejectClinicRequest(button.dataset.reject); await renderAdmin(root, { session: db().getSession() }); }
+    catch(error) {toast(error.message,"danger");}
+    finally {button.disabled=false;}
+  }));
 }
 
 function requestCard(r) {
@@ -35,5 +48,7 @@ export async function renderInvite(root, { params }) {
   if (!found) { root.innerHTML = shell(`<div class="card card-pad"><h1>Convite indisponível</h1><p>Este convite é inválido ou já foi utilizado.</p></div>`); return; }
   const r = found.request;
   root.innerHTML = shell(`<div class="card card-pad"><div class="kicker">Convite VEZZ</div><h1>Cadastrar primeiro gestor</h1><p>Complete os dados para administrar a clínica <strong>${escapeHtml(r.nome_clinica)}</strong>.</p><form id="invite-form">${field({ name: "nome", label: "Nome completo", required: true })}${field({ name: "email", label: "E-mail", type: "email", required: true })}${field({ name: "cargo", label: "Cargo", value: "Gestor" })}${field({ name: "senha", label: "Senha", type: "password", required: true })}<button class="btn btn-block">Concluir cadastro</button></form></div>`);
-  root.querySelector("#invite-form").addEventListener("submit", async (e) => { e.preventDefault(); try { const s = await db().acceptClinicInvite(params.token, Object.fromEntries(new FormData(e.target))); toast("Cadastro concluído.", "ok"); location.hash = "#/gestor"; } catch (err) { toast(err.message, "danger"); } });
+  const inviteForm = root.querySelector("#invite-form");
+  if (r.email_responsavel) inviteForm.elements.email.value = r.email_responsavel;
+  inviteForm.addEventListener("submit", async (e) => { e.preventDefault(); const button=inviteForm.querySelector("button"); if(button.disabled)return; button.disabled=true; try { await db().acceptClinicInvite(params.token, Object.fromEntries(new FormData(inviteForm))); toast("Cadastro concluído.", "ok"); location.hash = "#/gestor"; } catch (err) { toast(err.message, "danger"); } finally {button.disabled=false;} });
 }

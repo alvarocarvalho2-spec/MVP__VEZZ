@@ -1,15 +1,16 @@
 {
-  "routes": [
+  "cleanUrls": true,
+  "headers": [
     {
-      "src": "/.*",
-      "dest": "/maintenance.html",
-      "status": 503,
-      "headers": {
-        "Cache-Control": "no-store, max-age=0",
-        "Retry-After": "120",
-        "X-Robots-Tag": "noindex",
-        "X-Content-Type-Options": "nosniff"
-      }
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-VEZZ-Release", "value": "20261018-security" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
     }
   ]
 }

@@ -79,13 +79,21 @@ export function applyErrors(form, errors) {
     el.hidden = true;
   });
   form.querySelectorAll(".field").forEach((f) => f.classList.remove("is-invalid"));
+  form.querySelectorAll("[aria-invalid]").forEach(field => field.removeAttribute("aria-invalid"));
   const keys = Object.keys(errors);
   keys.forEach((key) => {
     const box = form.querySelector(`[data-error-for="${key}"]`);
     const field = form.querySelector(`[name="${key}"]`);
     if (box) {
+      box.id ||= `error-${key}`;
       box.textContent = errors[key];
       box.hidden = false;
+    }
+    if (field) {
+      field.setAttribute("aria-invalid", "true");
+      const descriptions = new Set((field.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+      if (box) descriptions.add(box.id);
+      field.setAttribute("aria-describedby", [...descriptions].join(" "));
     }
     field?.closest(".field")?.classList.add("is-invalid");
   });

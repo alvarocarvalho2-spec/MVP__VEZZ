@@ -9,3 +9,8 @@
 !.env.example
 tests/artifacts/
 output/playwright/
+node_modules/
+.playwright-cli/
+supabase/.temp/
+__pycache__/
+*.pyc

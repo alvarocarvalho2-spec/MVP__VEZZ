@@ -1,4 +1,4 @@
-import { generateTimeSlots, isPastDay, plusDaysISO, todayISO } from '../js/lib/utils.js';
+import { generateTimeSlots, isPastDay, plusDaysISO, todayISO, formatTime } from '../js/lib/utils.js';
 import { validarCPF, validarCNPJ, validarEmail, validarTelefone } from '../js/lib/validators.js';
 
 const hours = { seg:['08:00-12:00','14:00-18:00'], sab:['08:00-12:00'], dom:[] };
@@ -25,13 +25,14 @@ const gh = generateTimeSlots(hours.seg, hoje, []);
 const passados = gh.filter(s => s.reason === 'passado').length;
 const futuros  = gh.filter(s => !s.taken).length;
 const agora = new Date();
-const agoraMin = agora.getHours() * 60 + agora.getMinutes();
+const [horaClinica,minutoClinica]=formatTime(agora).split(':').map(Number);
+const agoraMin = horaClinica * 60 + minutoClinica;
 const coerente = gh.every((s) => {
   const [h, m] = s.time.split(':').map(Number);
   const slotMin = h * 60 + m;
   return slotMin <= agoraMin ? s.reason === 'passado' : s.taken === false;
 });
-check(`hoje coerente com a hora atual (${agora.getHours()}h: ${passados} passados / ${futuros} livres)`, coerente);
+check(`hoje coerente com a hora da clínica (${horaClinica}h: ${passados} passados / ${futuros} livres)`, coerente);
 
 // validações
 check('CPF válido aceito', validarCPF('529.982.247-25'));

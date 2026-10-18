@@ -50,7 +50,7 @@
 :root {
   --ink: #061b4f;
   --ink-soft: #3d4a72;
-  --muted: #6d7694;
+  --muted: #545f7d;
   --line: #dce2ef;
   --line-strong: #c5cde0;
   --paper: #f2f4f9;
@@ -64,9 +64,9 @@
   --gold: #0b3b8f;
   --gold-deep: #0b3b8f;
   --gold-soft: #e8eef8;
-  --ok: #1f7a5c;
+  --ok: #176044;
   --ok-soft: #d7eee4;
-  --warn: #b56a12;
+  --warn: #874900;
   --warn-soft: #f7e6cc;
   --danger: #b44538;
   --danger-soft: #f6d9d5;
@@ -113,6 +113,7 @@ body::before { display: none; }
 img { max-width: 100%; display: block; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--teal); text-decoration: none; }
+main p a:not(.btn), .modal-body p a:not(.btn) { text-decoration: underline; text-underline-offset: .16em; }
 a:hover { color: var(--teal-deep); }
 
 ::selection { background: var(--teal-soft); color: var(--ink); }
@@ -709,6 +710,7 @@ table.data tr:hover td { background: color-mix(in srgb, var(--teal-mist) 70%, va
 }
 .site-footer .wrap { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 28px; }
 .site-footer h3 { color: #fff; }
+.site-footer p { color: inherit; }
 .site-footer a { color: #d5dced; }
 .site-footer a:hover { color: #fff; }
 .site-footer .copy { grid-column: 1 / -1; border-top: 1px solid #2a4478; padding-top: 16px; color: #9aa8c7; font-size: 13px; }
@@ -807,7 +809,7 @@ table.data tr:hover td { background: color-mix(in srgb, var(--teal-mist) 70%, va
 .hours-window { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hours-window input[type="time"] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; color: var(--ink); background: var(--white); }
 .hours-window span { color: var(--muted); font-size: 13px; }
-.hours-day.is-closed .hours-windows, .hours-day.is-closed [data-add] { opacity: .4; pointer-events: none; }
+.hours-day.is-closed .hours-windows { pointer-events: none; }
 .slots {
   display: flex; flex-wrap: wrap; gap: 8px;
 }
@@ -824,7 +826,7 @@ table.data tr:hover td { background: color-mix(in srgb, var(--teal-mist) 70%, va
 .slot.is-busy,
 .slot:disabled {
   background: #eef0f5;
-  color: #8b93a8;
+  color: #5d6680;
   border-color: var(--line);
   text-decoration: line-through;
   cursor: not-allowed;
