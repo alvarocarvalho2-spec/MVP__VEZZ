@@ -22,7 +22,10 @@ Rode no SQL Editor, nessa ordem, **sem nenhum erro**:
 
 1. O conteúdo **inteiro** de `sql/schema.sql` — cria as 8 tabelas, RLS, policies, a função `vezz_is_admin()`, o trigger da fila, o realtime, a coluna `principal` no gestor (só o primeiro gestor cadastra outros gestores, edita os dados, os horários de funcionamento e troca a foto da clínica — os demais só visualizam) e o bucket `fotos-clinicas` no Storage. (Se um dia precisar reaplicar só as policies, rode `sql/policies.sql` — é idempotente.)
    - Banco **já existente**? Não recria do zero: rode as migrações idempotentes da pasta `sql/` na ordem do relatório de entrega (diagnóstico somente leitura → `migracao-agendamento-fila.sql` → tratamento de duplicidades, se houver → `reindexar-filas.sql`, se preciso → `migracao-seguranca-rls.sql`).
-2. Rode também `supabase/migrations/20261018163947_auditoria_integridade_acesso.sql`, **por último**, tanto em banco novo quanto existente. Essa migração fecha o acesso entre clínicas, valida as transições de consultas, torna consulta/fila atômicas e adiciona as RPCs usadas pela versão atual. Não publique apenas o frontend: veja a ordem de publicação e os limites em [docs/AUDITORIA-2026-10-18.md](docs/AUDITORIA-2026-10-18.md). Reaplicar scripts antigos de `sql/` exige reaplicar essa migração ao final.
+2. Rode também as migrações de `supabase/migrations/`, **por último e em ordem crescente**, tanto em banco novo quanto existente:
+   - `20261018163947_auditoria_integridade_acesso.sql`: fecha o acesso entre clínicas, valida as transições de consultas, torna consulta/fila atômicas e adiciona as RPCs usadas pela versão atual.
+   - `20261019223130_fila_por_horario.sql`: ordena as posições pelo horário da consulta e corrige as filas existentes. Veja [docs/FILA-POR-HORARIO.md](docs/FILA-POR-HORARIO.md).
+   - Não publique apenas o frontend: veja a ordem de publicação e os limites em [docs/AUDITORIA-2026-10-18.md](docs/AUDITORIA-2026-10-18.md). Reaplicar scripts antigos de `sql/` exige reaplicar as migrações versionadas nessa ordem ao final.
 3. Crie o usuário administrador: **Authentication → Users → Add user**
    - E-mail: o e-mail que você escolher para a conta administrativa
    - Senha: **defina uma senha forte e única, guardada em gerenciador de senhas**

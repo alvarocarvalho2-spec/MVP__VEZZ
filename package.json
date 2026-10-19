@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/security.test.mjs tests/database.test.mjs tests/edge.test.mjs",
+    "test": "node --test tests/security.test.mjs tests/database.test.mjs tests/edge.test.mjs tests/queue.test.mjs",
     "test:logic": "node tests/logica.mjs && node tests/motion-timing.mjs",
     "test:browser": "node tests/audit-browser.mjs",
     "test:legacy": "node tests/browser.mjs --local --verify --extended --lifecycle"

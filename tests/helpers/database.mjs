@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 
 export const ids = {
   clinic: '10000000-0000-4000-8000-000000000001', otherClinic: '10000000-0000-4000-8000-000000000002',
@@ -44,8 +44,15 @@ export async function database({ migrate = true } = {}) {
       ('${ids.otherAppointment}','${ids.otherPatient}','${ids.otherClinic}',((now() at time zone 'America/Sao_Paulo')::date+time '11:00') at time zone 'America/Sao_Paulo');
     insert into fila_atendimento(id_consulta) values('${ids.appointment}'),('${ids.otherAppointment}');
   `);
-  if (migrate) await pg.exec(await readFile(new URL('../../supabase/migrations/20261018163947_auditoria_integridade_acesso.sql', import.meta.url), 'utf8'));
+  if (migrate) await applyMigrations(pg);
   return pg;
+}
+
+export async function applyMigrations(pg) {
+  const migrations = new URL('../../supabase/migrations/', import.meta.url);
+  for (const file of (await readdir(migrations)).filter(name => name.endsWith('.sql')).sort()) {
+    await pg.exec(await readFile(new URL(file, migrations), 'utf8'));
+  }
 }
 
 export async function asRole(pg, role, email, sql, { admin = false, client = 'vezz-web/20261018' } = {}) {

@@ -16,7 +16,7 @@
 with esperado as (
   select f.id_fila_atendimento,
          row_number() over (partition by c.id_clinica, (c.data_hora at time zone 'America/Sao_Paulo')::date
-                            order by f.posicao, f.hora_entrada, f.id_fila_atendimento) as rn
+                            order by c.data_hora, f.hora_entrada, f.id_fila_atendimento) as rn
     from public.fila_atendimento f
     join public.consulta c on c.id_consulta = f.id_consulta
    where c.status = 'Agendada'

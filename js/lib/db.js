@@ -55,6 +55,13 @@ function isSlotConflict(err) {
   return /duplicate key|unique constraint|ux_consulta_slot_ativo/i.test(String(err.message || ""));
 }
 
+function compareQueueOrder(a, b) {
+  return Number(b.status === STATUS.EM_ATENDIMENTO) - Number(a.status === STATUS.EM_ATENDIMENTO)
+    || byDateAsc(a.data_hora, b.data_hora)
+    || byDateAsc(a.fila?.hora_entrada || 0, b.fila?.hora_entrada || 0)
+    || String(a.fila?.id_fila_atendimento || a.id_consulta).localeCompare(String(b.fila?.id_fila_atendimento || b.id_consulta));
+}
+
 /* =========================================================================
    Local adapter
    ========================================================================= */
@@ -74,12 +81,13 @@ export class LocalAdapter {
         this.db.convites ||= [];
       } catch {
         this.db = await buildSeed();
-        this.persist();
       }
     } else {
       this.db = await buildSeed();
-      this.persist();
     }
+    // Atualiza também as posições persistidas por versões anteriores.
+    this.db.clinicas.forEach((clinic) => this.reindexQueue(clinic.id_clinica));
+    this.persist();
     this.ready = true;
     return this.getSession();
   }
@@ -547,25 +555,15 @@ export class LocalAdapter {
     if (this.db.fila.some((f) => f.id_consulta === idConsulta)) return;
     const consulta = this.db.consultas.find((c) => c.id_consulta === idConsulta);
     if (!consulta) return;
-    // mesma fila = mesma clínica + mesma data do atendimento
-    const mesmaFila = this.db.fila
-      .map((f) => ({ f, c: this.db.consultas.find((x) => x.id_consulta === f.id_consulta) }))
-      .filter(
-        (x) =>
-          x.c &&
-          x.c.id_clinica === consulta.id_clinica &&
-          isSameDay(x.c.data_hora, consulta.data_hora) &&
-          (x.c.status === STATUS.AGENDADA || x.c.status === STATUS.EM_ATENDIMENTO)
-      );
-    const max = mesmaFila.reduce((m, x) => Math.max(m, x.c.status === STATUS.EM_ATENDIMENTO ? 0 : x.f.posicao), 0);
     this.db.fila.push({
       id_fila_atendimento: uid("fila"),
-      posicao: max + 1,
+      posicao: 0,
       hora_entrada: new Date().toISOString(),
       hora_inicio: null,
       hora_fim: null,
       id_consulta: idConsulta,
     });
+    this.reindexQueue(consulta.id_clinica, consulta.data_hora);
   }
 
   reindexQueue(idClinica, dia) {
@@ -574,9 +572,13 @@ export class LocalAdapter {
     const waiting = this.db.fila
       .map((f) => ({ f, c: this.db.consultas.find((x) => x.id_consulta === f.id_consulta) }))
       .filter((x) => alvo(x.c) && x.c.status === STATUS.AGENDADA)
-      .sort((a, b) => a.f.posicao - b.f.posicao || byDateAsc(a.c.data_hora, b.c.data_hora));
-    waiting.forEach((x, i) => {
-      x.f.posicao = i + 1;
+      .sort((a, b) => compareQueueOrder({ ...a.c, fila: a.f }, { ...b.c, fila: b.f }));
+    const positions = new Map();
+    waiting.forEach((x) => {
+      const day = toLocalInputDate(x.c.data_hora);
+      const position = (positions.get(day) || 0) + 1;
+      positions.set(day, position);
+      x.f.posicao = position;
     });
     this.db.fila
       .map((f) => ({ f, c: this.db.consultas.find((x) => x.id_consulta === f.id_consulta) }))
@@ -598,11 +600,7 @@ export class LocalAdapter {
           a.status !== STATUS.CANCELADA &&
           a.status !== STATUS.FINALIZADA
       )
-      .sort((a, b) => {
-        if (a.status === STATUS.EM_ATENDIMENTO) return -1;
-        if (b.status === STATUS.EM_ATENDIMENTO) return 1;
-        return (a.fila?.posicao || 99) - (b.fila?.posicao || 99);
-      });
+      .sort(compareQueueOrder);
   }
 
   getPatientQueue(idPaciente) {
@@ -1262,11 +1260,7 @@ export class SupabaseAdapter {
     const running = await this.listAppointments({ id_clinica: idClinica, status: STATUS.EM_ATENDIMENTO });
     return [...new Map([...list,...running].map(appointment => [appointment.id_consulta,appointment])).values()]
       .filter((a) => a.status === STATUS.AGENDADA || a.status === STATUS.EM_ATENDIMENTO)
-      .sort((a, b) => {
-        if (a.status === STATUS.EM_ATENDIMENTO) return -1;
-        if (b.status === STATUS.EM_ATENDIMENTO) return 1;
-        return (a.fila?.posicao || 99) - (b.fila?.posicao || 99);
-      });
+      .sort(compareQueueOrder);
   }
 
   async getPatientQueue(idPaciente) {

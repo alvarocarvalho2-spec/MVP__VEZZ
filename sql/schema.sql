@@ -448,10 +448,10 @@ begin
      and (c.data_hora at time zone 'America/Sao_Paulo')::date = p_dia
      and c.status = 'Em Atendimento';
 
-  -- quem aguarda fica em 1..N, na ordem da fila, só daquela clínica e data
+  -- quem aguarda fica em 1..N pelo horário da consulta, naquela clínica e data
   with ordenadas as (
     select f.id_fila_atendimento,
-           row_number() over (order by f.posicao, f.hora_entrada, f.id_fila_atendimento) as rn
+           row_number() over (order by c.data_hora, f.hora_entrada, f.id_fila_atendimento) as rn
       from public.fila_atendimento f
       join public.consulta c on c.id_consulta = f.id_consulta
      where c.id_clinica = p_id_clinica

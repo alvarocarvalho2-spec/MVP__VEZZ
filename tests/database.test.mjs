@@ -1,7 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { database, ids, asRole } from './helpers/database.mjs';
+import { database, applyMigrations, ids, asRole } from './helpers/database.mjs';
 
 let pg;
 before(async () => { pg = await database(); });
@@ -89,7 +88,7 @@ test('manager starts and finishes today; patient sees accurate status', async ()
   await denied(() => actor('manager-a@example.test',`update consulta set status='Em Atendimento' where id_consulta='${ids.appointment}'`));
 });
 test('migration is idempotent and public image bucket is restricted', async () => {
-  await pg.exec(await readFile(new URL('../supabase/migrations/20261018163947_auditoria_integridade_acesso.sql',import.meta.url),'utf8'));
+  await applyMigrations(pg);
   const bucket=(await pg.query("select * from storage.buckets where id='fotos-clinicas'")).rows[0];
   assert.equal(Number(bucket.file_size_limit),6291456); assert.deepEqual(bucket.allowed_mime_types,['image/jpeg','image/png','image/webp']);
 });
