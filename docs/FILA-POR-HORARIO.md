@@ -40,5 +40,22 @@ alterar só a ordenação da lista não corrige a posição recebida pelo pacien
 - Evidências em `output/playwright/queue-order/` e nenhum erro de console
   observado na verificação.
 
-Esta entrega foi validada localmente. A migração não foi aplicada ao Supabase
-remoto e o frontend não foi publicado nesta alteração.
+## Verificação em produção — 19/10/2026
+
+Após o push do commit `f23f764`, foi confirmada a migração
+`20261019223130_fila_por_horario` no histórico do projeto Supabase `MVP VEZZ`
+(`uexqqbozfmdswajdatua`). Os corpos das funções `vezz_reindex_fila_de` e
+`vezz_chamar_proximo` correspondem exatamente ao arquivo versionado. Não foi
+necessário reaplicar a migração ou fazer novas gravações no banco.
+
+O diagnóstico em produção confirmou zero posições incorretas, zero posições
+repetidas nas filas ativas e zero consultas ativas sem entrada na fila. Os
+gatilhos de criação, validação e reindexação estão habilitados; RLS segue
+habilitada em `consulta` e `fila_atendimento`. Os helpers internos continuam
+sem execução para `anon` e `authenticated`; a RPC de chamada está disponível
+somente para autenticados, com a validação de gestor preservada.
+
+O [site de produção](https://vezz-mvp.vercel.app) respondeu HTTP 200 e seu
+`js/lib/db.js` corresponde ao arquivo do commit `f23f764`. As evidências da
+conferência, incluindo os advisors consultados, estão em
+`output/playwright/queue-order/production-verification.json` (fora do Git).
