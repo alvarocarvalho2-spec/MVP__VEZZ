@@ -1,0 +1,229 @@
+{
+  "recordedAt": "2026-10-18T02:07:36.151Z",
+  "mode": "LocalAdapter — fictional seed only",
+  "fps": 30,
+  "clips": [
+    {
+      "name": "home",
+      "seconds": 10.0143793,
+      "viewport": {
+        "width": 1200,
+        "height": 1000
+      },
+      "liveFrames": 542,
+      "liveFramesPerSecond": 54.1221760993215,
+      "file": "public/footage/home.mp4"
+    },
+    {
+      "name": "journey",
+      "seconds": 15.010198799999998,
+      "viewport": {
+        "width": 1200,
+        "height": 1000
+      },
+      "liveFrames": 827,
+      "liveFramesPerSecond": 55.09587254767073,
+      "file": "public/footage/journey.mp4"
+    },
+    {
+      "name": "search",
+      "seconds": 5.4997445,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 210,
+      "liveFramesPerSecond": 38.18359198322758,
+      "file": "public/footage/search.mp4"
+    },
+    {
+      "name": "booking",
+      "seconds": 6.408958300000005,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 296,
+      "liveFramesPerSecond": 46.18535277410055,
+      "file": "public/footage/booking.mp4"
+    },
+    {
+      "name": "patient",
+      "seconds": 3.5035644999999933,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 210,
+      "liveFramesPerSecond": 59.93895645420554,
+      "file": "public/footage/patient.mp4"
+    },
+    {
+      "name": "manager",
+      "seconds": 7.516142699999997,
+      "viewport": {
+        "width": 1000,
+        "height": 1000
+      },
+      "liveFrames": 449,
+      "liveFramesPerSecond": 59.73808879387032,
+      "file": "public/footage/manager.mp4"
+    },
+    {
+      "name": "called",
+      "seconds": 3.409479899999991,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 204,
+      "liveFramesPerSecond": 59.83317279565148,
+      "file": "public/footage/called.mp4"
+    }
+  ],
+  "actions": [
+    {
+      "action": "SAVED",
+      "name": "home",
+      "seconds": 10.0143793,
+      "viewport": {
+        "width": 1200,
+        "height": 1000
+      },
+      "liveFrames": 542,
+      "liveFramesPerSecond": 54.1221760993215,
+      "file": "public/footage/home.mp4"
+    },
+    {
+      "action": "SAVED",
+      "name": "journey",
+      "seconds": 15.010198799999998,
+      "viewport": {
+        "width": 1200,
+        "height": 1000
+      },
+      "liveFrames": 827,
+      "liveFramesPerSecond": 55.09587254767073,
+      "file": "public/footage/journey.mp4"
+    },
+    {
+      "action": "Journey all intermediate scroll transitions captured",
+      "steps": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "geo": {
+        "start": 1767,
+        "timeline": {
+          "steps": [
+            {
+              "start": 0,
+              "enterEnd": 162.72,
+              "holdEnd": 603.72,
+              "exitEnd": 793.72,
+              "hold": 441
+            },
+            {
+              "start": 603.72,
+              "enterEnd": 793.72,
+              "holdEnd": 1182.72,
+              "exitEnd": 1372.72,
+              "hold": 389
+            },
+            {
+              "start": 1182.72,
+              "enterEnd": 1372.72,
+              "holdEnd": 1773.72,
+              "exitEnd": 1963.72,
+              "hold": 401
+            },
+            {
+              "start": 1773.72,
+              "enterEnd": 1963.72,
+              "holdEnd": 2334.7200000000003,
+              "exitEnd": 2524.7200000000003,
+              "hold": 371
+            }
+          ],
+          "total": 2479.36,
+          "outro": 144.64000000000001,
+          "transition": 190
+        }
+      }
+    },
+    {
+      "action": "SAVED",
+      "name": "search",
+      "seconds": 5.4997445,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 210,
+      "liveFramesPerSecond": 38.18359198322758,
+      "file": "public/footage/search.mp4"
+    },
+    {
+      "action": "SAVED",
+      "name": "booking",
+      "seconds": 6.408958300000005,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 296,
+      "liveFramesPerSecond": 46.18535277410055,
+      "file": "public/footage/booking.mp4"
+    },
+    {
+      "action": "Real local appointment persisted",
+      "count": 1,
+      "status": "Agendada"
+    },
+    {
+      "action": "SAVED",
+      "name": "patient",
+      "seconds": 3.5035644999999933,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 210,
+      "liveFramesPerSecond": 59.93895645420554,
+      "file": "public/footage/patient.mp4"
+    },
+    {
+      "action": "SAVED",
+      "name": "manager",
+      "seconds": 7.516142699999997,
+      "viewport": {
+        "width": 1000,
+        "height": 1000
+      },
+      "liveFrames": 449,
+      "liveFramesPerSecond": 59.73808879387032,
+      "file": "public/footage/manager.mp4"
+    },
+    {
+      "action": "SAVED",
+      "name": "called",
+      "seconds": 3.409479899999991,
+      "viewport": {
+        "width": 640,
+        "height": 1000
+      },
+      "liveFrames": 204,
+      "liveFramesPerSecond": 59.83317279565148,
+      "file": "public/footage/called.mp4"
+    },
+    {
+      "action": "Patient service verified",
+      "status": "Em Atendimento",
+      "position": 0
+    }
+  ],
+  "errors": [],
+  "blocked": []
+}

@@ -1,0 +1,258 @@
+{
+  "file": "C:\\Users\\PC\\Downloads\\vezz-mvp\\video-vezz\\final\\VEZZ_Reel_Previa_V3.mp4",
+  "sha256": "080412ece3a9b76ee65db416e317f6f5dabf69ccaa99808bdc295a89cd898b15",
+  "sizeBytes": 4429707,
+  "checks": {
+    "h264": true,
+    "correctResolution": true,
+    "fps30": true,
+    "frames1800": true,
+    "duration60": true,
+    "yuv420p": true,
+    "aacStereo": true,
+    "audio48k": true,
+    "fullJourney": true,
+    "persistedLocalAppointment": true,
+    "realServiceStatus": true,
+    "noPageErrors": true,
+    "noExternalRequests": true,
+    "previousMasterAndAllOriginalMediaPreserved": true,
+    "newCaptureLocalAndCorrect": true,
+    "cameraTrajectoriesContinuous": true,
+    "closingHoldAtLeast2point5Seconds": true,
+    "fullDecode": true,
+    "noAudioClipping": true,
+    "fullBrowserPlayback": true,
+    "productionFilesUnchanged": true
+  },
+  "metadata": {
+    "streams": [
+      {
+        "index": 0,
+        "codec_name": "h264",
+        "codec_long_name": "unknown",
+        "profile": "100",
+        "codec_type": "video",
+        "codec_tag_string": "avc1",
+        "codec_tag": "0x31637661",
+        "width": 540,
+        "height": 960,
+        "coded_width": 540,
+        "coded_height": 960,
+        "closed_captions": 0,
+        "film_grain": 0,
+        "has_b_frames": 2,
+        "sample_aspect_ratio": "1:1",
+        "display_aspect_ratio": "9:16",
+        "pix_fmt": "yuv420p",
+        "level": 31,
+        "color_range": "tv",
+        "color_space": "bt709",
+        "chroma_location": "center",
+        "field_order": "progressive",
+        "refs": 1,
+        "is_avc": "true",
+        "nal_length_size": "4",
+        "id": "0x1",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "30/1",
+        "time_base": "1/90000",
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "duration_ts": 5400000,
+        "duration": "60.000000",
+        "bit_rate": "392125",
+        "bits_per_raw_sample": "8",
+        "nb_frames": "1800",
+        "extradata_size": 50,
+        "disposition": {
+          "default": 1,
+          "dub": 0,
+          "original": 0,
+          "comment": 0,
+          "lyrics": 0,
+          "karaoke": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "visual_impaired": 0,
+          "clean_effects": 0,
+          "attached_pic": 0,
+          "timed_thumbnails": 0,
+          "non_diegetic": 0,
+          "captions": 0,
+          "descriptions": 0,
+          "metadata": 0,
+          "dependent": 0,
+          "still_image": 0,
+          "multilayer": 0
+        },
+        "tags": {
+          "language": "und",
+          "handler_name": "VideoHandler",
+          "vendor_id": "[0][0][0][0]",
+          "encoder": "Lavc61.19.100 libx264"
+        },
+        "side_data_list": [
+          {
+            "side_data_type": "ICC Profile"
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "codec_name": "aac",
+        "codec_long_name": "unknown",
+        "profile": "1",
+        "codec_type": "audio",
+        "codec_tag_string": "mp4a",
+        "codec_tag": "0x6134706d",
+        "sample_fmt": "fltp",
+        "sample_rate": "48000",
+        "channels": 2,
+        "channel_layout": "stereo",
+        "bits_per_sample": 0,
+        "initial_padding": 0,
+        "id": "0x2",
+        "r_frame_rate": "0/0",
+        "avg_frame_rate": "0/0",
+        "time_base": "1/48000",
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "duration_ts": 2882560,
+        "duration": "60.053333",
+        "bit_rate": "189375",
+        "nb_frames": "2815",
+        "extradata_size": 2,
+        "disposition": {
+          "default": 1,
+          "dub": 0,
+          "original": 0,
+          "comment": 0,
+          "lyrics": 0,
+          "karaoke": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "visual_impaired": 0,
+          "clean_effects": 0,
+          "attached_pic": 0,
+          "timed_thumbnails": 0,
+          "non_diegetic": 0,
+          "captions": 0,
+          "descriptions": 0,
+          "metadata": 0,
+          "dependent": 0,
+          "still_image": 0,
+          "multilayer": 0
+        },
+        "tags": {
+          "language": "und",
+          "handler_name": "SoundHandler",
+          "vendor_id": "[0][0][0][0]"
+        }
+      }
+    ],
+    "format": {
+      "filename": "C:\\Users\\PC\\Downloads\\vezz-mvp\\video-vezz\\final\\VEZZ_Reel_Previa_V3.mp4",
+      "nb_streams": 2,
+      "nb_programs": 0,
+      "nb_stream_groups": 0,
+      "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "start_time": "0.000000",
+      "duration": "60.053333",
+      "size": "4429707",
+      "bit_rate": "590103",
+      "probe_score": 100,
+      "tags": {
+        "major_brand": "isom",
+        "minor_version": "512",
+        "compatible_brands": "isomiso2avc1mp41",
+        "encoder": "Lavf61.7.100",
+        "comment": "Made with Remotion 4.0.462"
+      }
+    }
+  },
+  "loudness": {
+    "input_i": "-14.26",
+    "input_tp": "-1.05",
+    "input_lra": "2.50",
+    "input_thresh": "-24.35",
+    "output_i": "-14.32",
+    "output_tp": "-1.25",
+    "output_lra": "1.10",
+    "output_thresh": "-24.37",
+    "normalization_type": "dynamic",
+    "target_offset": "0.32"
+  },
+  "playback": {
+    "frames": 1789,
+    "last": 59.966667,
+    "maxGap": 0.1,
+    "errors": [],
+    "ended": true,
+    "duration": 60.053333,
+    "readyState": 4
+  },
+  "originalChanges": "",
+  "preservedMedia": {
+    "final/VEZZ_Reel_Imersivo.mp4": true,
+    "public/footage/booking.mp4": true,
+    "public/footage/called.mp4": true,
+    "public/footage/home.mp4": true,
+    "public/footage/journey.mp4": true,
+    "public/footage/manager.mp4": true,
+    "public/footage/patient.mp4": true,
+    "public/footage/search.mp4": true,
+    "public/audio/vezz-mix.wav": true,
+    "public/audio/vezz-original.wav": true,
+    "public/brand/bot-sprite-source.js": true,
+    "public/brand/Mokoto.ttf": true,
+    "public/brand/source-sans-400.woff2": true,
+    "public/brand/source-sans-600.woff2": true,
+    "public/brand/source-sans-700.woff2": true
+  },
+  "directionChecks": [
+    {
+      "scene": "home",
+      "maxScaleChangePerFrame": 0.013662637350083662,
+      "maxTranslationPerFrame": 21.075973085051746,
+      "continuous": true
+    },
+    {
+      "scene": "journey",
+      "maxScaleChangePerFrame": 0.027133653994712903,
+      "maxTranslationPerFrame": 39.685828449626165,
+      "continuous": true
+    },
+    {
+      "scene": "search",
+      "maxScaleChangePerFrame": 0.012474303650358287,
+      "maxTranslationPerFrame": 21.356262823768816,
+      "continuous": true
+    },
+    {
+      "scene": "booking",
+      "maxScaleChangePerFrame": 0.02203730495308931,
+      "maxTranslationPerFrame": 24.47210968055739,
+      "continuous": true
+    },
+    {
+      "scene": "patient",
+      "maxScaleChangePerFrame": 0.013647968046798686,
+      "maxTranslationPerFrame": 2.6325522994498893,
+      "continuous": true
+    },
+    {
+      "scene": "manager",
+      "maxScaleChangePerFrame": 0.009359386718750029,
+      "maxTranslationPerFrame": 14.901407402602016,
+      "continuous": true
+    },
+    {
+      "scene": "called",
+      "maxScaleChangePerFrame": 0.0077964397814738184,
+      "maxTranslationPerFrame": 3.229941691822465,
+      "continuous": true
+    }
+  ],
+  "review": "Exported MP4 decoded completely, played end-to-end in Chrome, and decoded key frames saved for visual review."
+}

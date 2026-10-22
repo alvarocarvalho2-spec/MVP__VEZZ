@@ -1,0 +1,15 @@
+* {box-sizing:border-box}
+.reel {font-family:'Source Sans 3',sans-serif;background:#061b4f;color:#f8faff;-webkit-font-smoothing:antialiased;overflow:hidden}
+.grid {position:absolute;inset:500px -500px -800px;background-image:linear-gradient(#3fe6ff3d 1px,transparent 1px),linear-gradient(90deg,#3fe6ff3d 1px,transparent 1px);background-size:130px 130px;mask-image:linear-gradient(transparent,#000 45%,transparent)}
+.orbit {position:absolute;border:1px solid #70afff;border-radius:50%;border-right-color:transparent;border-bottom-color:transparent}
+.vignette {position:absolute;inset:0;background:linear-gradient(180deg,#020c2900 64%,#020c2955),radial-gradient(ellipse at 50% 50%,transparent 44%,#020b2a44)}
+.topbar {position:absolute;left:86px;right:168px;top:236px;display:flex;align-items:center;justify-content:space-between;gap:30px}
+.chapter {display:flex;gap:12px;align-items:center;color:#b8cdef;font-size:24px;white-space:nowrap}
+.chapter i {width:7px;height:7px;border-radius:50%;background:#3fe6ff;box-shadow:0 0 12px #3fe6ff88}
+.headline {position:absolute;left:86px;top:330px;width:840px}
+.text-line {overflow:hidden;padding-bottom:8px;margin-bottom:-1px;white-space:nowrap}
+.film-chrome {height:38px;width:100%;background:#091d48;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:15px;color:#e4efff;letter-spacing:.6px;border-bottom:1px solid #7da4dc3b}
+.journey-dots {position:absolute;left:86px;top:565px;display:flex;gap:26px;font-size:24px}
+.journey-dots>div {display:flex;gap:11px;align-items:center}
+.journey-dots i {width:7px;height:7px;border-radius:50%}
+.intro-streak {position:absolute;inset:0;filter:drop-shadow(0 0 11px #3fe6ffb0)}

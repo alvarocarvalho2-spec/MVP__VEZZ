@@ -1,0 +1,38 @@
+[
+  {
+    "scene": "home",
+    "maxScaleChangePerFrame": 0.02006167252761326,
+    "maxTranslationPerFrame": 26.014960928965976,
+    "continuous": true
+  },
+  {
+    "scene": "search",
+    "maxScaleChangePerFrame": 0.012474303650358287,
+    "maxTranslationPerFrame": 21.356262823768816,
+    "continuous": true
+  },
+  {
+    "scene": "booking",
+    "maxScaleChangePerFrame": 0.02203730495308931,
+    "maxTranslationPerFrame": 24.47210968055739,
+    "continuous": true
+  },
+  {
+    "scene": "patient",
+    "maxScaleChangePerFrame": 0.013647968046798686,
+    "maxTranslationPerFrame": 2.6325522994498893,
+    "continuous": true
+  },
+  {
+    "scene": "manager",
+    "maxScaleChangePerFrame": 0.012463012345679036,
+    "maxTranslationPerFrame": 21.288411002082285,
+    "continuous": true
+  },
+  {
+    "scene": "called",
+    "maxScaleChangePerFrame": 0.0077964397814738184,
+    "maxTranslationPerFrame": 3.229941691822465,
+    "continuous": true
+  }
+]

@@ -1,0 +1,69 @@
+{
+  "recordedAt": "2026-10-18T02:59:22.715Z",
+  "mode": "LocalAdapter — fictional seed only",
+  "fps": 30,
+  "clips": [
+    {
+      "name": "manager-v3",
+      "seconds": 7.5115363,
+      "viewport": {
+        "width": 1000,
+        "height": 1000
+      },
+      "liveFrames": 445,
+      "liveFramesPerSecond": 59.242208547937125,
+      "file": "public/footage/manager-v3.mp4"
+    }
+  ],
+  "actions": [
+    {
+      "action": "click",
+      "clip": "manager-v3",
+      "at": 0.9614880000000002,
+      "label": "Abrir fila"
+    },
+    {
+      "action": "click",
+      "clip": "manager-v3",
+      "at": 2.268549099999999,
+      "label": "Finalizar e chamar próximo"
+    },
+    {
+      "action": "click",
+      "clip": "manager-v3",
+      "at": 3.528629,
+      "label": "Finalizar e chamar próximo"
+    },
+    {
+      "action": "click",
+      "clip": "manager-v3",
+      "at": 4.7250132,
+      "label": "Finalizar e chamar próximo"
+    },
+    {
+      "action": "click",
+      "clip": "manager-v3",
+      "at": 5.926652600000001,
+      "label": "Finalizar e chamar próximo"
+    },
+    {
+      "action": "SAVED",
+      "name": "manager-v3",
+      "seconds": 7.5115363,
+      "viewport": {
+        "width": 1000,
+        "height": 1000
+      },
+      "liveFrames": 445,
+      "liveFramesPerSecond": 59.242208547937125,
+      "file": "public/footage/manager-v3.mp4"
+    },
+    {
+      "action": "V3 manager final real status",
+      "status": "Em Atendimento",
+      "ticket": 71
+    }
+  ],
+  "errors": [],
+  "blocked": []
+}
